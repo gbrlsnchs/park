@@ -2,22 +2,39 @@ use std::{ffi::OsStr, path::PathBuf};
 
 use thiserror::Error;
 
-/// Possible errors when adding nodes.
+/// Possible errors when adding paths to nodes.
 #[derive(Debug, Error, PartialEq)]
 pub enum AddError {
+	/// This represents an error for when trying to add a path to a leaf node. Only branch nodes
+	/// can have paths added.
 	#[error("node for {0:?} is leaf, not branch")]
 	LeafAsBranch(PathBuf),
+	/// This represents an error for when trying to add a node and there's already a leaf node for
+	/// that same path.
 	#[error("leaf already exists for {0:?}")]
 	LeafExists(PathBuf),
 }
 
+/// Alias for the result when adding to a node.
 pub type AddResult = Result<(), AddError>;
 
+/// A segment of path in Park's tree structure.
 #[derive(Debug, PartialEq)]
 pub enum Node {
+	/// The root of the tree, has no paths, only nodes.
 	Root(Vec<Node>),
-	Branch { path: PathBuf, children: Vec<Node> },
-	Leaf { path: PathBuf },
+	/// Nodes that are branches simply hold other nodes and are never used as targets.
+	Branch {
+		/// Segment path for the branch.
+		path: PathBuf,
+		/// Nodes under the branch. May be leaves or other branches.
+		children: Vec<Node>,
+	},
+	/// These nodes are used as targets. They can't become branches.
+	Leaf {
+		/// Segment path for the leaf.
+		path: PathBuf,
+	},
 }
 
 impl Node {
@@ -67,6 +84,7 @@ impl Node {
 	}
 
 	/// Returns the segment path for the node. Root panics.
+	// TODO(gbrlsnchs): Add unit tests.
 	fn get_path(&self) -> PathBuf {
 		match self {
 			Self::Leaf { path } => path.into(),
