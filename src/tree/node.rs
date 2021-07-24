@@ -143,7 +143,7 @@ mod tests {
 			let got = case.node_before.add(case.input);
 
 			assert_eq!(got, case.want);
-			assert_eq!(case.node_after, case.node_before);
+			assert_eq!(case.node_before, case.node_after);
 		}
 	}
 }
