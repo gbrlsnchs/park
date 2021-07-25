@@ -2,6 +2,8 @@ use std::{ffi::OsStr, path::PathBuf};
 
 use thiserror::Error;
 
+use crate::config::Options;
+
 /// Possible errors when adding paths to nodes.
 #[derive(Debug, Error, PartialEq)]
 pub enum AddError {
@@ -39,7 +41,7 @@ pub enum Node {
 
 impl Node {
 	/// Adds a path to the node if and only if a node for that path doesn't exist yet.
-	pub fn add(&mut self, path: PathBuf) -> AddResult {
+	pub fn add(&mut self, path: PathBuf, opts: Option<Options>) -> AddResult {
 		// Let's break the path into segments.
 		let segments = path.iter().collect::<Vec<&OsStr>>();
 
@@ -67,13 +69,13 @@ impl Node {
 					} else {
 						let rest = rest.iter().collect();
 						if let Some(branch) = child {
-							branch.add(rest)?;
+							branch.add(rest, opts)?;
 						} else {
 							let mut branch = Node::Branch {
 								path: segment.into(),
 								children: Vec::new(),
 							};
-							branch.add(rest)?;
+							branch.add(rest, opts)?;
 							children.push(branch);
 						}
 					}
@@ -107,7 +109,7 @@ mod tests {
 	fn test_add() {
 		struct Test {
 			node_before: Node,
-			input: PathBuf,
+			input: (PathBuf, Option<Options>),
 			node_after: Node,
 			want: AddResult,
 		}
@@ -115,7 +117,7 @@ mod tests {
 		let test_cases = vec![
 			Test {
 				node_before: Node::Root(Vec::new()),
-				input: PathBuf::from("foo"),
+				input: (PathBuf::from("foo"), None),
 				node_after: Node::Root(vec![Node::Leaf {
 					path: PathBuf::from("foo"),
 				}]),
@@ -123,7 +125,7 @@ mod tests {
 			},
 			Test {
 				node_before: Node::Root(Vec::new()),
-				input: PathBuf::from("foo/bar"),
+				input: (PathBuf::from("foo/bar"), None),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
@@ -136,7 +138,7 @@ mod tests {
 				node_before: Node::Root(vec![Node::Leaf {
 					path: PathBuf::from("foo"),
 				}]),
-				input: PathBuf::from("foo"),
+				input: (PathBuf::from("foo"), None),
 				node_after: Node::Root(vec![Node::Leaf {
 					path: PathBuf::from("foo"),
 				}]),
@@ -149,7 +151,7 @@ mod tests {
 						path: PathBuf::from("bar"),
 					}],
 				}]),
-				input: PathBuf::from("foo"),
+				input: (PathBuf::from("foo"), None),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
@@ -161,7 +163,7 @@ mod tests {
 		];
 
 		for mut case in test_cases.into_iter() {
-			let got = case.node_before.add(case.input);
+			let got = case.node_before.add(case.input.0, case.input.1);
 
 			assert_eq!(got, case.want);
 			assert_eq!(case.node_before, case.node_after);
