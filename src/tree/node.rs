@@ -167,4 +167,24 @@ mod tests {
 			assert_eq!(case.node_before, case.node_after);
 		}
 	}
+
+	#[test]
+	fn test_error_messages() {
+		let test_cases = vec![
+			(
+				AddError::LeafAsBranch(PathBuf::from("foo/bar")),
+				r#"node for "foo/bar" is leaf, not branch"#,
+			),
+			(
+				AddError::LeafExists(PathBuf::from("foo/bar")),
+				r#"leaf already exists for "foo/bar""#,
+			),
+		];
+
+		for case in test_cases.iter() {
+			let got = case.0.to_string();
+
+			assert_eq!(got, case.1);
+		}
+	}
 }
