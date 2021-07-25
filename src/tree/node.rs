@@ -53,9 +53,12 @@ impl Node {
 					// Let's check whether there's already a node with same name, otherwise let's
 					// just create it.
 					let child = children.iter_mut().find(|node| node.get_path() == segment);
+					let is_leaf = rest.is_empty();
 
-					if rest.is_empty() {
-						if child.is_some() {
+					if is_leaf {
+						let leaf_exists = child.is_some();
+
+						if leaf_exists {
 							return Err(AddError::LeafExists(segment.into()));
 						}
 
