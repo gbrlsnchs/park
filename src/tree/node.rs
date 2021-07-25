@@ -47,11 +47,10 @@ impl Node {
 		if let Some((segment, rest)) = segments.split_first() {
 			let segment = *segment;
 
-			// We only support adding new nodes to nodes that are not leaves!
 			match self {
 				Self::Root(children) | Self::Branch { children, .. } => {
-					// Let's check whether there's already a node with same name, otherwise let's
-					// just create it.
+					// Let's check whether there's already a node with same path, otherwise let's
+					// just create it, if needed.
 					let child = children.iter_mut().find(|node| node.get_path() == segment);
 					let is_leaf = rest.is_empty();
 
@@ -79,6 +78,7 @@ impl Node {
 						}
 					}
 				}
+				// We only support adding new nodes to nodes that are not leaves!
 				_ => return Err(AddError::LeafAsBranch(segment.into())),
 			};
 		}
