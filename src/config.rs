@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{ffi::OsString, path::PathBuf};
 
 /// The main configuration for Park.
 pub struct Config {
@@ -9,4 +9,7 @@ pub struct Config {
 }
 
 /// Represents all possible modifications that can be made to links.
-pub struct Options {}
+pub struct Options {
+	/// A different name for a target's link.
+	pub link_name: OsString,
+}
