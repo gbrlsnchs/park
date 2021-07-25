@@ -1,4 +1,7 @@
-use std::{ffi::OsStr, path::PathBuf};
+use std::{
+	ffi::{OsStr, OsString},
+	path::PathBuf,
+};
 
 use thiserror::Error;
 
@@ -36,6 +39,8 @@ pub enum Node {
 	Leaf {
 		/// Segment path for the leaf.
 		path: PathBuf,
+		/// The name of the link.
+		link_name: OsString,
 	},
 }
 
@@ -63,8 +68,15 @@ impl Node {
 							return Err(AddError::LeafExists(segment.into()));
 						}
 
+						let link_name = if let Some(Options { link_name }) = opts {
+							Some(link_name)
+						} else {
+							None
+						};
+
 						children.push(Self::Leaf {
 							path: segment.into(),
+							link_name: link_name.unwrap_or(segment.into()),
 						})
 					} else {
 						let rest = rest.iter().collect();
@@ -92,8 +104,8 @@ impl Node {
 	// TODO(gbrlsnchs): Add unit tests.
 	fn get_path(&self) -> PathBuf {
 		match self {
-			Self::Leaf { path } => path.into(),
-			Self::Branch { path, children: _ } => path.into(),
+			Self::Leaf { path, .. } => path.into(),
+			Self::Branch { path, .. } => path.into(),
 			_ => panic!("Can't get path for root node."),
 		}
 	}
@@ -119,6 +131,7 @@ mod tests {
 				node_before: Node::Root(Vec::new()),
 				input: (PathBuf::from("foo"), None),
 				node_after: Node::Root(vec![Node::Leaf {
+					link_name: OsString::from("foo"),
 					path: PathBuf::from("foo"),
 				}]),
 				want: Ok(()),
@@ -129,6 +142,7 @@ mod tests {
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
+						link_name: OsString::from("bar"),
 						path: PathBuf::from("bar"),
 					}],
 				}]),
@@ -136,10 +150,12 @@ mod tests {
 			},
 			Test {
 				node_before: Node::Root(vec![Node::Leaf {
+					link_name: OsString::from("foo"),
 					path: PathBuf::from("foo"),
 				}]),
 				input: (PathBuf::from("foo"), None),
 				node_after: Node::Root(vec![Node::Leaf {
+					link_name: OsString::from("foo"),
 					path: PathBuf::from("foo"),
 				}]),
 				want: Err(AddError::LeafExists(PathBuf::from("foo"))),
@@ -148,6 +164,7 @@ mod tests {
 				node_before: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
+						link_name: OsString::from("bar"),
 						path: PathBuf::from("bar"),
 					}],
 				}]),
@@ -155,10 +172,42 @@ mod tests {
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
+						link_name: OsString::from("bar"),
 						path: PathBuf::from("bar"),
 					}],
 				}]),
 				want: Err(AddError::LeafExists(PathBuf::from("foo"))),
+			},
+			Test {
+				node_before: Node::Root(Vec::new()),
+				input: (
+					PathBuf::from("foo"),
+					Some(Options {
+						link_name: OsString::from("new_name"),
+					}),
+				),
+				node_after: Node::Root(vec![Node::Leaf {
+					link_name: OsString::from("new_name"),
+					path: PathBuf::from("foo"),
+				}]),
+				want: Ok(()),
+			},
+			Test {
+				node_before: Node::Root(Vec::new()),
+				input: (
+					PathBuf::from("foo/bar"),
+					Some(Options {
+						link_name: OsString::from("new_name"),
+					}),
+				),
+				node_after: Node::Root(vec![Node::Branch {
+					path: PathBuf::from("foo"),
+					children: vec![Node::Leaf {
+						link_name: OsString::from("new_name"),
+						path: PathBuf::from("bar"),
+					}],
+				}]),
+				want: Ok(()),
 			},
 		];
 
