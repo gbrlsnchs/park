@@ -77,7 +77,7 @@ impl Node {
 						children.push(Self::Leaf {
 							path: segment.into(),
 							link_name: link_name.unwrap_or(segment.into()),
-						})
+						});
 					} else {
 						let rest = rest.iter().collect();
 						if let Some(branch) = child {
