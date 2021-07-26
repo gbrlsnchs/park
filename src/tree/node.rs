@@ -152,6 +152,31 @@ mod tests {
 				want: Ok(()),
 			},
 			Test {
+				description: "simple node to existing branch",
+				node_before: Node::Root(vec![Node::Branch {
+					path: PathBuf::from("foo"),
+					children: vec![Node::Leaf {
+						link_name: OsString::from("bar"),
+						path: PathBuf::from("bar"),
+					}],
+				}]),
+				input: (PathBuf::from("foo/test"), None),
+				node_after: Node::Root(vec![Node::Branch {
+					path: PathBuf::from("foo"),
+					children: vec![
+						Node::Leaf {
+							link_name: OsString::from("bar"),
+							path: PathBuf::from("bar"),
+						},
+						Node::Leaf {
+							link_name: OsString::from("test"),
+							path: PathBuf::from("test"),
+						},
+					],
+				}]),
+				want: Ok(()),
+			},
+			Test {
 				description: "leaf exists for simple node",
 				node_before: Node::Root(vec![Node::Leaf {
 					link_name: OsString::from("foo"),
