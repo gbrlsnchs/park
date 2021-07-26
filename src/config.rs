@@ -9,6 +9,7 @@ pub struct Config {
 }
 
 /// Represents all possible modifications that can be made to links.
+#[derive(Default)]
 pub struct Options {
 	/// A different name for a target's link.
 	pub link_name: OsString,
