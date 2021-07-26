@@ -119,7 +119,8 @@ mod tests {
 
 	#[test]
 	fn test_add() {
-		struct Test {
+		struct Test<'a> {
+			description: &'a str,
 			node_before: Node,
 			input: (PathBuf, Option<Options>),
 			node_after: Node,
@@ -128,6 +129,7 @@ mod tests {
 
 		let test_cases = vec![
 			Test {
+				description: "simple first node",
 				node_before: Node::Root(Vec::new()),
 				input: (PathBuf::from("foo"), None),
 				node_after: Node::Root(vec![Node::Leaf {
@@ -137,6 +139,7 @@ mod tests {
 				want: Ok(()),
 			},
 			Test {
+				description: "simple nested node",
 				node_before: Node::Root(Vec::new()),
 				input: (PathBuf::from("foo/bar"), None),
 				node_after: Node::Root(vec![Node::Branch {
@@ -149,6 +152,7 @@ mod tests {
 				want: Ok(()),
 			},
 			Test {
+				description: "leaf exists for simple node",
 				node_before: Node::Root(vec![Node::Leaf {
 					link_name: OsString::from("foo"),
 					path: PathBuf::from("foo"),
@@ -161,6 +165,7 @@ mod tests {
 				want: Err(AddError::LeafExists(PathBuf::from("foo"))),
 			},
 			Test {
+				description: "leaf exists for nested node",
 				node_before: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
@@ -179,6 +184,7 @@ mod tests {
 				want: Err(AddError::LeafExists(PathBuf::from("foo"))),
 			},
 			Test {
+				description: "new link name for simple first node",
 				node_before: Node::Root(Vec::new()),
 				input: (
 					PathBuf::from("foo"),
@@ -193,6 +199,7 @@ mod tests {
 				want: Ok(()),
 			},
 			Test {
+				description: "new link name for nested node",
 				node_before: Node::Root(Vec::new()),
 				input: (
 					PathBuf::from("foo/bar"),
@@ -214,8 +221,12 @@ mod tests {
 		for mut case in test_cases.into_iter() {
 			let got = case.node_before.add(case.input.0, case.input.1);
 
-			assert_eq!(got, case.want);
-			assert_eq!(case.node_before, case.node_after);
+			assert_eq!(got, case.want, "bad result for {:?}", case.description);
+			assert_eq!(
+				case.node_before, case.node_after,
+				"nodes mismatch for {:?}",
+				case.description
+			);
 		}
 	}
 
