@@ -68,7 +68,7 @@ impl Node {
 							return Err(AddError::LeafExists(segment.into()));
 						}
 
-						let link_name = if let Some(Options { link_name }) = opts {
+						let link_name = if let Some(Options { link_name, .. }) = opts {
 							Some(link_name)
 						} else {
 							None
@@ -190,6 +190,7 @@ mod tests {
 					PathBuf::from("foo"),
 					Some(Options {
 						link_name: OsString::from("new_name"),
+						..Options::default()
 					}),
 				),
 				node_after: Node::Root(vec![Node::Leaf {
@@ -205,6 +206,7 @@ mod tests {
 					PathBuf::from("foo/bar"),
 					Some(Options {
 						link_name: OsString::from("new_name"),
+						..Options::default()
 					}),
 				),
 				node_after: Node::Root(vec![Node::Branch {
