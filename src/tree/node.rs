@@ -75,8 +75,7 @@ impl Node {
 							link_name: opts
 								.link_name
 								.filter(|name| !name.is_empty())
-								.or_else(|| Some(segment.into()))
-								.unwrap(),
+								.unwrap_or_else(|| segment.into()),
 						});
 					} else {
 						let rest = rest.iter().collect();
