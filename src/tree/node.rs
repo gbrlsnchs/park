@@ -48,7 +48,7 @@ pub enum Node {
 
 impl Node {
 	/// Adds a path to the node if and only if a node for that path doesn't exist yet.
-	pub fn add(&mut self, path: PathBuf, opts: Option<Options>) -> AddResult {
+	pub fn add(&mut self, path: PathBuf, options: Option<Options>) -> AddResult {
 		// Let's break the path into segments.
 		let segments = path.iter().collect::<Vec<&OsStr>>();
 
@@ -70,26 +70,28 @@ impl Node {
 							return Err(AddError::LeafExists(segment.into()));
 						}
 
-						let opts = opts.unwrap_or_default();
+						let options = options.unwrap_or_default();
 
 						children.push(Self::Leaf {
 							path: segment.into(),
-							base_dir: opts.base_dir.unwrap_or_default(),
-							link_name: opts
+							base_dir: options.base_dir.unwrap_or_default(),
+							link_name: options
 								.link_name
 								.filter(|name| !name.is_empty())
 								.unwrap_or_else(|| segment.into()),
 						});
 					} else {
 						let rest = rest.iter().collect();
+
 						if let Some(branch) = child {
-							branch.add(rest, opts)?;
+							branch.add(rest, options)?;
 						} else {
 							let mut branch = Node::Branch {
 								path: segment.into(),
 								children: Vec::new(),
 							};
-							branch.add(rest, opts)?;
+
+							branch.add(rest, options)?;
 							children.push(branch);
 						}
 					}
