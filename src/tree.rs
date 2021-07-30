@@ -33,7 +33,7 @@ impl Tree {
 
 #[cfg(test)]
 mod tests {
-	use std::{collections::HashMap, ffi::OsString, path::PathBuf};
+	use std::{ffi::OsString, path::PathBuf};
 
 	use maplit::hashmap;
 	use pretty_assertions::assert_eq;
@@ -55,7 +55,7 @@ mod tests {
 				description: "simple config with a single target",
 				input: Config {
 					targets: vec![PathBuf::from("foo")],
-					options: HashMap::new(),
+					options: hashmap! {},
 				},
 				want: Ok(Tree {
 					root: Node::Root(vec![Node::Leaf {
@@ -88,7 +88,7 @@ mod tests {
 					targets: vec![PathBuf::from("foo")],
 					options: hashmap! {
 						PathBuf::from("foo") => Options{
-						    link_name: Some(OsString::from("new_name")),
+							link_name: Some(OsString::from("new_name")),
 							..Options::default()
 						},
 					},
