@@ -68,15 +68,15 @@ impl Node {
 							return Err(AddError::LeafExists(segment.into()));
 						}
 
-						let link_name = if let Some(Options { link_name, .. }) = opts {
-							Some(link_name)
-						} else {
-							None
-						};
+						let opts = opts.unwrap_or_default();
 
 						children.push(Self::Leaf {
 							path: segment.into(),
-							link_name: link_name.unwrap_or(segment.into()),
+							link_name: opts
+								.link_name
+								.filter(|name| !name.is_empty())
+								.or_else(|| Some(segment.into()))
+								.unwrap(),
 						});
 					} else {
 						let rest = rest.iter().collect();
@@ -214,7 +214,7 @@ mod tests {
 				input: (
 					PathBuf::from("foo"),
 					Some(Options {
-						link_name: OsString::from("new_name"),
+						link_name: Some(OsString::from("new_name")),
 						..Options::default()
 					}),
 				),
@@ -230,7 +230,7 @@ mod tests {
 				input: (
 					PathBuf::from("foo/bar"),
 					Some(Options {
-						link_name: OsString::from("new_name"),
+						link_name: Some(OsString::from("new_name")),
 						..Options::default()
 					}),
 				),
@@ -238,6 +238,76 @@ mod tests {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
 						link_name: OsString::from("new_name"),
+						path: PathBuf::from("bar"),
+					}],
+				}]),
+				want: Ok(()),
+			},
+			Test {
+				description: "unset link name for simple first node",
+				node_before: Node::Root(Vec::new()),
+				input: (
+					PathBuf::from("foo"),
+					Some(Options {
+						link_name: None,
+						..Options::default()
+					}),
+				),
+				node_after: Node::Root(vec![Node::Leaf {
+					link_name: OsString::from("foo"),
+					path: PathBuf::from("foo"),
+				}]),
+				want: Ok(()),
+			},
+			Test {
+				description: "unset link name for nested node",
+				node_before: Node::Root(Vec::new()),
+				input: (
+					PathBuf::from("foo/bar"),
+					Some(Options {
+						link_name: None,
+						..Options::default()
+					}),
+				),
+				node_after: Node::Root(vec![Node::Branch {
+					path: PathBuf::from("foo"),
+					children: vec![Node::Leaf {
+						link_name: OsString::from("bar"),
+						path: PathBuf::from("bar"),
+					}],
+				}]),
+				want: Ok(()),
+			},
+			Test {
+				description: "empty link name for simple first node",
+				node_before: Node::Root(Vec::new()),
+				input: (
+					PathBuf::from("foo"),
+					Some(Options {
+						link_name: Some(OsString::new()),
+						..Options::default()
+					}),
+				),
+				node_after: Node::Root(vec![Node::Leaf {
+					link_name: OsString::from("foo"),
+					path: PathBuf::from("foo"),
+				}]),
+				want: Ok(()),
+			},
+			Test {
+				description: "empty link name for nested node",
+				node_before: Node::Root(Vec::new()),
+				input: (
+					PathBuf::from("foo/bar"),
+					Some(Options {
+						link_name: Some(OsString::new()),
+						..Options::default()
+					}),
+				),
+				node_after: Node::Root(vec![Node::Branch {
+					path: PathBuf::from("foo"),
+					children: vec![Node::Leaf {
+						link_name: OsString::from("bar"),
 						path: PathBuf::from("bar"),
 					}],
 				}]),

@@ -4,17 +4,17 @@ use std::{ffi::OsString, path::PathBuf};
 pub struct Config {
 	/// List of files meant to be linked.
 	pub targets: Vec<PathBuf>,
-	/// List of options for targets.
-	pub options: Options,
+	/// Optional list of options for targets.
+	pub options: Option<Options>,
 }
 
 /// Represents all possible modifications that can be made to links.
 #[derive(Default)]
 pub struct Options {
-	/// The base directory of a target's link.
-	pub base_dir: BaseDir,
-	/// A different name for a target's link.
-	pub link_name: OsString,
+	/// Optional alternative name for target's base directory.
+	pub base_dir: Option<BaseDir>,
+	/// Optional alternative name for target's link.
+	pub link_name: Option<OsString>,
 }
 
 /// Represents the base directory for a link. Its meaning is up to the application.
