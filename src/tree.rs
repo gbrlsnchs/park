@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, Options};
 
 use self::node::{AddError, Node};
 
@@ -19,9 +19,12 @@ impl Tree {
 		for target in config.targets.into_iter() {
 			// This "pops" the value out of the hash map, avoiding us to have to deal with a
 			// borrowed value.
-			let options = config.options.remove(&target);
+			let Options {
+				base_dir,
+				link_name,
+			} = config.options.remove(&target).unwrap_or_default();
 
-			tree.root.add(target, options)?;
+			tree.root.add(target, (base_dir, link_name))?;
 		}
 
 		Ok(tree)

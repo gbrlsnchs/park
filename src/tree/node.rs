@@ -5,7 +5,7 @@ use std::{
 
 use thiserror::Error;
 
-use crate::config::{BaseDir, Options};
+use crate::config::BaseDir;
 
 /// Possible errors when adding paths to nodes.
 #[derive(Debug, Error, PartialEq)]
@@ -22,6 +22,10 @@ pub enum AddError {
 
 /// Alias for the result when adding to a node.
 pub type AddResult = Result<(), AddError>;
+
+/// Tuple of allowed overrides for a node. First element is the base directory, while the second
+/// one is an alternative link name.
+pub type AddOverrides = (Option<BaseDir>, Option<OsString>);
 
 /// A segment of path in Park's tree structure.
 #[derive(Debug, PartialEq)]
@@ -48,7 +52,7 @@ pub enum Node {
 
 impl Node {
 	/// Adds a path to the node if and only if a node for that path doesn't exist yet.
-	pub fn add(&mut self, path: PathBuf, options: Option<Options>) -> AddResult {
+	pub fn add(&mut self, path: PathBuf, overrides: AddOverrides) -> AddResult {
 		// Let's break the path into segments.
 		let segments = path.iter().collect::<Vec<&OsStr>>();
 
@@ -70,13 +74,12 @@ impl Node {
 							return Err(AddError::LeafExists(segment.into()));
 						}
 
-						let options = options.unwrap_or_default();
+						let (base_dir, link_name) = overrides;
 
 						children.push(Self::Leaf {
 							path: segment.into(),
-							base_dir: options.base_dir.unwrap_or_default(),
-							link_name: options
-								.link_name
+							base_dir: base_dir.unwrap_or_default(),
+							link_name: link_name
 								.filter(|name| !name.is_empty())
 								.unwrap_or_else(|| segment.into()),
 						});
@@ -84,14 +87,14 @@ impl Node {
 						let rest = rest.iter().collect();
 
 						if let Some(branch) = child {
-							branch.add(rest, options)?;
+							branch.add(rest, overrides)?;
 						} else {
 							let mut branch = Node::Branch {
 								path: segment.into(),
 								children: Vec::new(),
 							};
 
-							branch.add(rest, options)?;
+							branch.add(rest, overrides)?;
 							children.push(branch);
 						}
 					}
@@ -126,7 +129,7 @@ mod tests {
 		struct Test<'a> {
 			description: &'a str,
 			node_before: Node,
-			input: (PathBuf, Option<Options>),
+			input: (PathBuf, AddOverrides),
 			node_after: Node,
 			want: AddResult,
 		}
@@ -135,7 +138,7 @@ mod tests {
 			Test {
 				description: "simple first node",
 				node_before: Node::Root(Vec::new()),
-				input: (PathBuf::from("foo"), None),
+				input: (PathBuf::from("foo"), (None, None)),
 				node_after: Node::Root(vec![Node::Leaf {
 					base_dir: BaseDir::Config,
 					link_name: OsString::from("foo"),
@@ -146,7 +149,7 @@ mod tests {
 			Test {
 				description: "simple nested node",
 				node_before: Node::Root(Vec::new()),
-				input: (PathBuf::from("foo/bar"), None),
+				input: (PathBuf::from("foo/bar"), (None, None)),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
@@ -167,7 +170,7 @@ mod tests {
 						path: PathBuf::from("bar"),
 					}],
 				}]),
-				input: (PathBuf::from("foo/test"), None),
+				input: (PathBuf::from("foo/test"), (None, None)),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![
@@ -192,7 +195,7 @@ mod tests {
 					link_name: OsString::from("foo"),
 					path: PathBuf::from("foo"),
 				}]),
-				input: (PathBuf::from("foo"), None),
+				input: (PathBuf::from("foo"), (None, None)),
 				node_after: Node::Root(vec![Node::Leaf {
 					base_dir: BaseDir::Config,
 					link_name: OsString::from("foo"),
@@ -210,7 +213,7 @@ mod tests {
 						path: PathBuf::from("bar"),
 					}],
 				}]),
-				input: (PathBuf::from("foo"), None),
+				input: (PathBuf::from("foo"), (None, None)),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
@@ -226,10 +229,7 @@ mod tests {
 				node_before: Node::Root(Vec::new()),
 				input: (
 					PathBuf::from("foo"),
-					Some(Options {
-						link_name: Some(OsString::from("new_name")),
-						..Options::default()
-					}),
+					(None, Some(OsString::from("new_name"))),
 				),
 				node_after: Node::Root(vec![Node::Leaf {
 					base_dir: BaseDir::Config,
@@ -243,10 +243,7 @@ mod tests {
 				node_before: Node::Root(Vec::new()),
 				input: (
 					PathBuf::from("foo/bar"),
-					Some(Options {
-						link_name: Some(OsString::from("new_name")),
-						..Options::default()
-					}),
+					(None, Some(OsString::from("new_name"))),
 				),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
@@ -259,52 +256,9 @@ mod tests {
 				want: Ok(()),
 			},
 			Test {
-				description: "unset link name for simple first node",
-				node_before: Node::Root(Vec::new()),
-				input: (
-					PathBuf::from("foo"),
-					Some(Options {
-						link_name: None,
-						..Options::default()
-					}),
-				),
-				node_after: Node::Root(vec![Node::Leaf {
-					base_dir: BaseDir::Config,
-					link_name: OsString::from("foo"),
-					path: PathBuf::from("foo"),
-				}]),
-				want: Ok(()),
-			},
-			Test {
-				description: "unset link name for nested node",
-				node_before: Node::Root(Vec::new()),
-				input: (
-					PathBuf::from("foo/bar"),
-					Some(Options {
-						link_name: None,
-						..Options::default()
-					}),
-				),
-				node_after: Node::Root(vec![Node::Branch {
-					path: PathBuf::from("foo"),
-					children: vec![Node::Leaf {
-						base_dir: BaseDir::Config,
-						link_name: OsString::from("bar"),
-						path: PathBuf::from("bar"),
-					}],
-				}]),
-				want: Ok(()),
-			},
-			Test {
 				description: "empty link name for simple first node",
 				node_before: Node::Root(Vec::new()),
-				input: (
-					PathBuf::from("foo"),
-					Some(Options {
-						link_name: Some(OsString::new()),
-						..Options::default()
-					}),
-				),
+				input: (PathBuf::from("foo"), (None, Some(OsString::new()))),
 				node_after: Node::Root(vec![Node::Leaf {
 					base_dir: BaseDir::Config,
 					link_name: OsString::from("foo"),
@@ -315,13 +269,7 @@ mod tests {
 			Test {
 				description: "empty link name for nested node",
 				node_before: Node::Root(Vec::new()),
-				input: (
-					PathBuf::from("foo/bar"),
-					Some(Options {
-						link_name: Some(OsString::new()),
-						..Options::default()
-					}),
-				),
+				input: (PathBuf::from("foo/bar"), (None, Some(OsString::new()))),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
@@ -335,13 +283,7 @@ mod tests {
 			Test {
 				description: "different base directory for simple first node",
 				node_before: Node::Root(Vec::new()),
-				input: (
-					PathBuf::from("foo"),
-					Some(Options {
-						base_dir: Some(BaseDir::Home),
-						..Options::default()
-					}),
-				),
+				input: (PathBuf::from("foo"), (Some(BaseDir::Home), None)),
 				node_after: Node::Root(vec![Node::Leaf {
 					base_dir: BaseDir::Home,
 					link_name: OsString::from("foo"),
@@ -352,13 +294,7 @@ mod tests {
 			Test {
 				description: "empty link name for nested node",
 				node_before: Node::Root(Vec::new()),
-				input: (
-					PathBuf::from("foo/bar"),
-					Some(Options {
-						base_dir: Some(BaseDir::Home),
-						..Options::default()
-					}),
-				),
+				input: (PathBuf::from("foo/bar"), (Some(BaseDir::Home), None)),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
