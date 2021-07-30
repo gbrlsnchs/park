@@ -15,6 +15,10 @@ pub struct Options {
 	pub base_dir: Option<BaseDir>,
 	/// Optional alternative name for target's link.
 	pub link_name: Option<OsString>,
+	/// Optional tags that conjunctively toggle a target on or off.
+	pub conjunctive_tags: Option<Vec<String>>,
+	/// Optional tags that disjunctively toggle a target on or off.
+	pub disjunctive_tags: Option<Vec<String>>,
 }
 
 /// Represents the base directory for a link. Its meaning is up to the application.
