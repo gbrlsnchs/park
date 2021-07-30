@@ -1,11 +1,11 @@
-use std::{ffi::OsString, path::PathBuf};
+use std::{collections::HashMap, ffi::OsString, path::PathBuf};
 
 /// The main configuration for Park.
 pub struct Config {
 	/// List of files meant to be linked.
 	pub targets: Vec<PathBuf>,
 	/// Optional list of options for targets.
-	pub options: Option<Options>,
+	pub options: HashMap<PathBuf, Options>,
 }
 
 /// Represents all possible modifications that can be made to links.
