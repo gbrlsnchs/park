@@ -307,7 +307,7 @@ mod tests {
 			},
 		];
 
-		for mut case in test_cases.into_iter() {
+		for mut case in test_cases {
 			let got = case.node_before.add(case.input.0, case.input.1);
 
 			assert_eq!(got, case.want, "bad result for {:?}", case.description);
@@ -332,7 +332,7 @@ mod tests {
 			),
 		];
 
-		for case in test_cases.iter() {
+		for case in test_cases {
 			let got = case.0.to_string();
 
 			assert_eq!(got, case.1);
