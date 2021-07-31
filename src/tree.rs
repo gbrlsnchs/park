@@ -21,7 +21,7 @@ impl Tree {
 		let mut tree = Tree {
 			root: Node::Root(Vec::with_capacity(config.targets.len())),
 		};
-		for target in config.targets.into_iter() {
+		for target in config.targets {
 			// This "pops" the value out of the hash map, avoiding us to have to deal with a
 			// borrowed value.
 			let Options {
@@ -267,7 +267,7 @@ mod tests {
 			},
 		];
 
-		for case in test_cases.into_iter() {
+		for case in test_cases {
 			let got = Tree::parse(case.input.0, case.input.1);
 
 			assert_eq!(got, case.want, "bad result for {:?}", case.description);
