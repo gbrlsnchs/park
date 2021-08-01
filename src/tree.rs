@@ -34,7 +34,7 @@ impl Tree {
 			let node_tags = conjunctive_tags.unwrap_or_default();
 			let mut allowed = true;
 
-			for tag in node_tags.iter() {
+			for tag in &node_tags {
 				allowed = allowed && tags.contains(tag);
 			}
 
@@ -45,7 +45,7 @@ impl Tree {
 			let node_tags = disjunctive_tags.unwrap_or_default();
 			let mut allowed = node_tags.is_empty();
 
-			for tag in node_tags.iter() {
+			for tag in &node_tags {
 				allowed = allowed || tags.contains(tag);
 			}
 
