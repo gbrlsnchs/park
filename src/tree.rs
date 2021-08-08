@@ -72,7 +72,7 @@ impl<'a> IntoIterator for &'a Tree {
 
 			match node {
 				Node::Root(children) | Node::Branch { children, .. } => {
-					for child in children.iter().rev() {
+					for child in children {
 						append(stack, child);
 					}
 				}
@@ -348,19 +348,6 @@ mod tests {
 					},
 				]),
 				&Node::Branch {
-					path: PathBuf::from("qux"),
-					children: vec![Node::Leaf {
-						base_dir: BaseDir::Config,
-						link_name: OsString::from("quux"),
-						path: PathBuf::from("quux"),
-					}],
-				},
-				&Node::Leaf {
-					base_dir: BaseDir::Config,
-					link_name: OsString::from("quux"),
-					path: PathBuf::from("quux"),
-				},
-				&Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
 						base_dir: BaseDir::Config,
@@ -372,6 +359,19 @@ mod tests {
 					base_dir: BaseDir::Config,
 					link_name: OsString::from("bar"),
 					path: PathBuf::from("bar"),
+				},
+				&Node::Branch {
+					path: PathBuf::from("qux"),
+					children: vec![Node::Leaf {
+						base_dir: BaseDir::Config,
+						link_name: OsString::from("quux"),
+						path: PathBuf::from("quux"),
+					}],
+				},
+				&Node::Leaf {
+					base_dir: BaseDir::Config,
+					link_name: OsString::from("quux"),
+					path: PathBuf::from("quux"),
 				},
 			]
 		);
