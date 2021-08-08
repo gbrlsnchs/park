@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, vec::IntoIter};
 
 use crate::config::{Config, Options};
 
@@ -57,6 +57,33 @@ impl Tree {
 		}
 
 		Ok(tree)
+	}
+}
+
+impl<'a> IntoIterator for &'a Tree {
+	type Item = &'a Node;
+	type IntoIter = IntoIter<&'a Node>;
+
+	/// Returns a depth first iterator.
+	fn into_iter(self) -> Self::IntoIter {
+		/// Recursively builds a stack of nodes using depth first search.
+		fn append<'a>(stack: &mut Vec<&'a Node>, node: &'a Node) {
+			stack.push(node);
+
+			match node {
+				Node::Root(children) | Node::Branch { children, .. } => {
+					for child in children {
+						append(stack, child);
+					}
+				}
+				_ => {}
+			}
+		}
+
+		let mut stack = vec![];
+		append(&mut stack, &self.root);
+
+		stack.into_iter()
 	}
 }
 
@@ -272,5 +299,48 @@ mod tests {
 
 			assert_eq!(got, case.want, "bad result for {:?}", case.description);
 		}
+	}
+
+	#[test]
+	fn depth_first_iterator() {
+		let tree = Tree {
+			root: Node::Root(vec![Node::Branch {
+				path: PathBuf::from("foo"),
+				children: vec![Node::Leaf {
+					base_dir: BaseDir::Config,
+					link_name: OsString::from("bar"),
+					path: PathBuf::from("bar"),
+				}],
+			}]),
+		};
+
+		let got = tree.into_iter().collect::<Vec<&Node>>();
+
+		assert_eq!(
+			got,
+			vec![
+				&Node::Root(vec![Node::Branch {
+					path: PathBuf::from("foo"),
+					children: vec![Node::Leaf {
+						base_dir: BaseDir::Config,
+						link_name: OsString::from("bar"),
+						path: PathBuf::from("bar"),
+					}],
+				}]),
+				&Node::Branch {
+					path: PathBuf::from("foo"),
+					children: vec![Node::Leaf {
+						base_dir: BaseDir::Config,
+						link_name: OsString::from("bar"),
+						path: PathBuf::from("bar"),
+					}],
+				},
+				&Node::Leaf {
+					base_dir: BaseDir::Config,
+					link_name: OsString::from("bar"),
+					path: PathBuf::from("bar"),
+				}
+			]
+		);
 	}
 }
