@@ -7,7 +7,7 @@ use self::node::{AddError, Node};
 mod node;
 
 /// String values used to toggle nodes on and off.
-type Tags = HashSet<String>;
+pub type Tags = HashSet<String>;
 
 /// Structure representing all dotfiles after reading a configuration for Park.
 #[derive(Debug, PartialEq)]
@@ -17,7 +17,7 @@ struct Tree {
 
 impl Tree {
 	/// Parses a configuration and returns a tree based on it.
-	fn parse(mut config: Config, tags: Tags) -> Result<Self, AddError> {
+	pub fn parse(mut config: Config, tags: Tags) -> Result<Self, AddError> {
 		let mut tree = Tree {
 			root: Node::Root(Vec::with_capacity(config.targets.len())),
 		};
@@ -72,7 +72,7 @@ impl<'a> IntoIterator for &'a Tree {
 
 			match node {
 				Node::Root(children) | Node::Branch { children, .. } => {
-					for child in children {
+					for child in children.iter().rev() {
 						append(stack, child);
 					}
 				}
@@ -304,14 +304,24 @@ mod tests {
 	#[test]
 	fn depth_first_iterator() {
 		let tree = Tree {
-			root: Node::Root(vec![Node::Branch {
-				path: PathBuf::from("foo"),
-				children: vec![Node::Leaf {
-					base_dir: BaseDir::Config,
-					link_name: OsString::from("bar"),
-					path: PathBuf::from("bar"),
-				}],
-			}]),
+			root: Node::Root(vec![
+				Node::Branch {
+					path: PathBuf::from("foo"),
+					children: vec![Node::Leaf {
+						base_dir: BaseDir::Config,
+						link_name: OsString::from("bar"),
+						path: PathBuf::from("bar"),
+					}],
+				},
+				Node::Branch {
+					path: PathBuf::from("qux"),
+					children: vec![Node::Leaf {
+						base_dir: BaseDir::Config,
+						link_name: OsString::from("quux"),
+						path: PathBuf::from("quux"),
+					}],
+				},
+			]),
 		};
 
 		let got = tree.into_iter().collect::<Vec<&Node>>();
@@ -319,14 +329,37 @@ mod tests {
 		assert_eq!(
 			got,
 			vec![
-				&Node::Root(vec![Node::Branch {
-					path: PathBuf::from("foo"),
+				&Node::Root(vec![
+					Node::Branch {
+						path: PathBuf::from("foo"),
+						children: vec![Node::Leaf {
+							base_dir: BaseDir::Config,
+							link_name: OsString::from("bar"),
+							path: PathBuf::from("bar"),
+						}],
+					},
+					Node::Branch {
+						path: PathBuf::from("qux"),
+						children: vec![Node::Leaf {
+							base_dir: BaseDir::Config,
+							link_name: OsString::from("quux"),
+							path: PathBuf::from("quux"),
+						}],
+					},
+				]),
+				&Node::Branch {
+					path: PathBuf::from("qux"),
 					children: vec![Node::Leaf {
 						base_dir: BaseDir::Config,
-						link_name: OsString::from("bar"),
-						path: PathBuf::from("bar"),
+						link_name: OsString::from("quux"),
+						path: PathBuf::from("quux"),
 					}],
-				}]),
+				},
+				&Node::Leaf {
+					base_dir: BaseDir::Config,
+					link_name: OsString::from("quux"),
+					path: PathBuf::from("quux"),
+				},
 				&Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
@@ -339,7 +372,7 @@ mod tests {
 					base_dir: BaseDir::Config,
 					link_name: OsString::from("bar"),
 					path: PathBuf::from("bar"),
-				}
+				},
 			]
 		);
 	}
