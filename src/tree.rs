@@ -1,4 +1,8 @@
-use std::{collections::HashSet, vec::IntoIter};
+use std::{
+	collections::HashSet,
+	fmt::{Display, Formatter, Result as FmtResult},
+	vec::IntoIter,
+};
 
 use crate::config::{Config, Options};
 
@@ -84,6 +88,100 @@ impl<'a> IntoIterator for &'a Tree {
 		append(&mut stack, &self.root);
 
 		stack.into_iter()
+	}
+}
+
+impl Display for Tree {
+	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+		let mut indent_boundaries = Vec::new();
+
+		/// This will build the line for the node, filling it with correct symbols, like in
+		///
+		/// \ \ .
+		/// \ \ ├── A
+		/// \ \ │   └── B
+		/// \ \ ├── C
+		/// \ \ └── D
+		/// \ \ \    └── E
+		///
+		///  where "│   └── B" is considered a line, for example.
+		fn indent<'a>(f: &mut Formatter<'_>, indent_boundaries: &'a mut Vec<bool>) -> FmtResult {
+			let mut prefix;
+			for (idx, is_last) in indent_boundaries.iter().enumerate() {
+				let is_boundary = *is_last;
+				let is_rightmost = idx == indent_boundaries.len() - 1;
+
+				if !is_rightmost {
+					prefix = "│";
+
+					if is_boundary {
+						prefix = " ";
+					}
+
+					write!(f, "{}   ", prefix)?;
+
+					continue;
+				}
+
+				prefix = "├";
+
+				if is_boundary {
+					prefix = "└";
+				}
+
+				write!(f, "{}── ", prefix)?;
+			}
+
+			Ok(())
+		}
+
+		fn write<'a>(
+			f: &mut Formatter<'_>,
+			node: &'a Node,
+			indent_boundaries: &'a mut Vec<bool>,
+		) -> FmtResult {
+			match node {
+				Node::Root(children) => {
+					writeln!(f, ".")?;
+
+					for (idx, child) in children.iter().enumerate() {
+						indent_boundaries.push(idx == children.len() - 1);
+						write(f, child, indent_boundaries)?;
+						indent_boundaries.pop();
+					}
+				}
+				Node::Branch { path, children } => {
+					indent(f, indent_boundaries)?;
+					writeln!(f, "{:?}", path)?;
+
+					for (idx, child) in children.iter().enumerate() {
+						indent_boundaries.push(idx == children.len() - 1);
+						write(f, child, indent_boundaries)?;
+						indent_boundaries.pop();
+					}
+				}
+				Node::Leaf {
+					path,
+					base_dir,
+					link_name,
+				} => {
+					indent(f, indent_boundaries)?;
+					writeln!(
+						f,
+						"{path:?} <- {base_dir:?}/{link_name:?}",
+						path = path,
+						base_dir = base_dir,
+						link_name = link_name
+					)?;
+				}
+			}
+
+			Ok(())
+		}
+
+		write(f, &self.root, &mut indent_boundaries)?;
+
+		Ok(())
 	}
 }
 
@@ -374,6 +472,44 @@ mod tests {
 					path: PathBuf::from("quux"),
 				},
 			]
+		);
+	}
+
+	#[test]
+	fn format_tree() {
+		let tree = Tree {
+			root: Node::Root(vec![
+				Node::Branch {
+					path: PathBuf::from("foo"),
+					children: vec![Node::Leaf {
+						base_dir: BaseDir::Config,
+						link_name: OsString::from("bar"),
+						path: PathBuf::from("bar"),
+					}],
+				},
+				Node::Branch {
+					path: PathBuf::from("qux"),
+					children: vec![Node::Leaf {
+						base_dir: BaseDir::Config,
+						link_name: OsString::from("quux"),
+						path: PathBuf::from("quux"),
+					}],
+				},
+			]),
+		};
+
+		println!("{}", tree);
+
+		// TODO(gbrlsnchs): This can (and should) get better in the future. =)
+		assert_eq!(
+			tree.to_string(),
+			concat!(
+				".\n",
+				"├── \"foo\"\n",
+				"│   └── \"bar\" <- Config/\"bar\"\n",
+				"└── \"qux\"\n",
+				"    └── \"quux\" <- Config/\"quux\"\n",
+			)
 		);
 	}
 }
