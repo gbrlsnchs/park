@@ -152,7 +152,7 @@ impl Display for Tree {
 				}
 				Node::Branch { path, children } => {
 					indent(f, indent_boundaries)?;
-					writeln!(f, "{:?}", path)?;
+					writeln!(f, "{}", path.to_string_lossy())?;
 
 					for (idx, child) in children.iter().enumerate() {
 						indent_boundaries.push(idx == children.len() - 1);
@@ -168,10 +168,10 @@ impl Display for Tree {
 					indent(f, indent_boundaries)?;
 					writeln!(
 						f,
-						"{path:?} <- {base_dir:?}/{link_name:?}",
-						path = path,
+						"{path} <- {base_dir:?}/{link_name}",
+						path = path.to_string_lossy(),
 						base_dir = base_dir,
-						link_name = link_name
+						link_name = link_name.to_string_lossy()
 					)?;
 				}
 			}
@@ -505,10 +505,10 @@ mod tests {
 			tree.to_string(),
 			concat!(
 				".\n",
-				"├── \"foo\"\n",
-				"│   └── \"bar\" <- Config/\"bar\"\n",
-				"└── \"qux\"\n",
-				"    └── \"quux\" <- Config/\"quux\"\n",
+				"├── foo\n",
+				"│   └── bar <- Config/bar\n",
+				"└── qux\n",
+				"    └── quux <- Config/quux\n",
 			)
 		);
 	}
