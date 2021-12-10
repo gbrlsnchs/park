@@ -5,7 +5,7 @@ use std::{
 
 use thiserror::Error;
 
-use crate::config::BaseDir;
+use crate::config::Link;
 
 /// Possible errors when adding paths to nodes.
 #[derive(Debug, Error, PartialEq)]
@@ -22,10 +22,6 @@ pub enum AddError {
 
 /// Alias for the result when adding to a node.
 pub type AddResult = Result<(), AddError>;
-
-/// Tuple of allowed overrides for a node. First element is the base directory, while the second
-/// one is an alternative link name.
-pub type AddOverrides = (Option<BaseDir>, Option<OsString>);
 
 /// A segment of path in Park's tree structure.
 #[derive(Debug, PartialEq)]
@@ -44,7 +40,7 @@ pub enum Node {
 		/// Segment path for the leaf.
 		path: PathBuf,
 		/// The base directory of the link.
-		base_dir: BaseDir,
+		base_dir: PathBuf,
 		/// The name of the link.
 		link_name: OsString,
 	},
@@ -52,7 +48,7 @@ pub enum Node {
 
 impl Node {
 	/// Adds a path to the node if and only if a node for that path doesn't exist yet.
-	pub fn add(&mut self, path: PathBuf, overrides: AddOverrides) -> AddResult {
+	pub fn add(&mut self, path: PathBuf, link: Link) -> AddResult {
 		// Let's break the path into segments.
 		let segments = path.iter().collect::<Vec<&OsStr>>();
 
@@ -74,27 +70,32 @@ impl Node {
 							return Err(AddError::LeafExists(segment.into()));
 						}
 
-						let (base_dir, link_name) = overrides;
+						let Link {
+							base_dir,
+							name: link_name,
+						} = link;
 
 						children.push(Self::Leaf {
 							path: segment.into(),
-							base_dir: base_dir.unwrap_or_default(),
-							link_name: link_name
-								.filter(|name| !name.is_empty())
-								.unwrap_or_else(|| segment.into()),
+							base_dir,
+							link_name: if link_name.is_empty() {
+								segment.into()
+							} else {
+								link_name
+							},
 						});
 					} else {
 						let rest = rest.iter().collect();
 
 						if let Some(branch) = child {
-							branch.add(rest, overrides)?;
+							branch.add(rest, link)?;
 						} else {
 							let mut branch = Node::Branch {
 								path: segment.into(),
 								children: Vec::new(),
 							};
 
-							branch.add(rest, overrides)?;
+							branch.add(rest, link)?;
 							children.push(branch);
 						}
 					}

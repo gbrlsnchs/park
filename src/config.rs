@@ -2,45 +2,38 @@ use std::{collections::HashMap, ffi::OsString, path::PathBuf};
 
 /// The main configuration for Park.
 pub struct Config {
-	/// List of files meant to be linked.
-	pub targets: Vec<PathBuf>,
-	/// Optional list of options for targets.
-	pub options: HashMap<PathBuf, Options>,
+	pub defaults: Defaults,
+	pub targets: HashMap<PathBuf, Target>,
 }
 
-/// Represents all possible modifications that can be made to links.
+/// These defaults should get applied to the command during runtime.
+pub struct Defaults {
+	tags: Vec<String>,
+	link: Link,
+}
+
+/// Represents configuration for a dotfile.
+pub struct Target {
+	/// Link options of a dotfile.
+	pub link: Option<Link>,
+	/// Tags under which a dotfile should be managed.
+	pub tags: Option<Tags>,
+}
+
 #[derive(Default)]
-pub struct Options {
-	/// Optional alternative name for target's base directory.
-	pub base_dir: Option<BaseDir>,
-	/// Optional alternative name for target's link.
-	pub link_name: Option<OsString>,
-	/// Optional tags that conjunctively toggle a target on or off.
-	pub conjunctive_tags: Option<Vec<String>>,
-	/// Optional tags that disjunctively toggle a target on or off.
-	pub disjunctive_tags: Option<Vec<String>>,
+/// Configuration for constraints that toggle certain dotfiles on and off.
+pub struct Tags {
+	/// These tags are evaluated conjunctively.
+	pub all_of: Vec<String>,
+	/// These tags are evaluated disjunctively.
+	pub any_of: Vec<String>,
 }
 
-/// Represents the base directory for a link. Its meaning is up to the application.
-#[derive(Debug, PartialEq)]
-pub enum BaseDir {
-	Config,
-	Cache,
-	Data,
-	Home,
-	Bin,
-	Documents,
-	Download,
-	Desktop,
-	Pictures,
-	Music,
-	Videos,
-	Templates,
-	PublicShare,
-}
-
-impl Default for BaseDir {
-	fn default() -> Self {
-		Self::Config
-	}
+#[derive(Default)]
+/// Configuration for the symlink of dotfiles.
+pub struct Link {
+	/// The place where the symlink gets created in.
+	pub base_dir: PathBuf,
+	/// Filename for the symlink.
+	pub name: OsString,
 }

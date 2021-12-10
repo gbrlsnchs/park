@@ -4,7 +4,7 @@ use std::{
 	vec::IntoIter,
 };
 
-use crate::config::{Config, Options};
+use crate::config::{Config, Target};
 
 use self::node::{AddError, Node};
 
@@ -21,24 +21,20 @@ struct Tree {
 
 impl Tree {
 	/// Parses a configuration and returns a tree based on it.
-	pub fn parse(mut config: Config, tags: Tags) -> Result<Self, AddError> {
+	pub fn parse(config: Config, tags: Tags) -> Result<Self, AddError> {
 		let mut tree = Tree {
 			root: Node::Root(Vec::with_capacity(config.targets.len())),
 		};
-		for target in config.targets {
-			// This "pops" the value out of the hash map, avoiding us to have to deal with a
-			// borrowed value.
-			let Options {
-				base_dir,
-				link_name,
-				conjunctive_tags,
-				disjunctive_tags,
-			} = config.options.remove(&target).unwrap_or_default();
+		for (target_path, target) in config.targets {
+			let Target {
+				link,
+				tags: target_tags,
+			} = target;
 
-			let node_tags = conjunctive_tags.unwrap_or_default();
+			let node_tags = target_tags.unwrap_or_default();
 			let mut allowed = true;
 
-			for tag in &node_tags {
+			for tag in &node_tags.all_of {
 				allowed = allowed && tags.contains(tag);
 			}
 
@@ -46,10 +42,9 @@ impl Tree {
 				continue;
 			}
 
-			let node_tags = disjunctive_tags.unwrap_or_default();
-			let mut allowed = node_tags.is_empty();
+			let mut allowed = node_tags.all_of.is_empty();
 
-			for tag in &node_tags {
+			for tag in &node_tags.any_of {
 				allowed = allowed || tags.contains(tag);
 			}
 
@@ -57,7 +52,7 @@ impl Tree {
 				continue;
 			}
 
-			tree.root.add(target, (base_dir, link_name))?;
+			tree.root.add(target_path, link.unwrap_or_default())?;
 		}
 
 		Ok(tree)
