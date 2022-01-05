@@ -38,11 +38,9 @@ pub enum Node {
 	/// These nodes are used as targets. They can't become branches.
 	Leaf {
 		/// Segment path for the leaf.
-		path: PathBuf,
+		target_path: PathBuf,
 		/// The base directory of the link.
-		base_dir: PathBuf,
-		/// The name of the link.
-		link_name: OsString,
+		link_path: PathBuf,
 	},
 }
 
@@ -75,12 +73,14 @@ impl Node {
 							name: link_name,
 						} = link;
 
+						let base_dir = base_dir.unwrap_or_else(|| default_base_dir.into());
+						let link_name = link_name
+							.filter(|link_name| !link_name.is_empty())
+							.unwrap_or_else(|| segment.into());
+
 						children.push(Self::Leaf {
-							path: segment.into(),
-							base_dir: base_dir.unwrap_or_else(|| default_base_dir.into()),
-							link_name: link_name
-								.filter(|link_name| !link_name.is_empty())
-								.unwrap_or_else(|| segment.into()),
+							target_path: segment.into(),
+							link_path: base_dir.join(link_name),
 						});
 					} else {
 						let rest = rest.iter().collect();
@@ -110,7 +110,9 @@ impl Node {
 	// TODO(gbrlsnchs): Add unit tests.
 	fn get_path(&self) -> PathBuf {
 		match self {
-			Self::Leaf { path, .. } => path.into(),
+			Self::Leaf {
+				target_path: path, ..
+			} => path.into(),
 			Self::Branch { path, .. } => path.into(),
 			_ => panic!("Can't get path for root node."),
 		}
@@ -141,9 +143,8 @@ mod tests {
 				node_before: Node::Root(Vec::new()),
 				input: (PathBuf::from("foo"), Link::default()),
 				node_after: Node::Root(vec![Node::Leaf {
-					base_dir: default_base_dir.clone(),
-					link_name: OsString::from("foo"),
-					path: PathBuf::from("foo"),
+					link_path: default_base_dir.join("foo"),
+					target_path: PathBuf::from("foo"),
 				}]),
 				want: Ok(()),
 			},
@@ -154,9 +155,8 @@ mod tests {
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: default_base_dir.clone(),
-						link_name: OsString::from("bar"),
-						path: PathBuf::from("bar"),
+						link_path: default_base_dir.join("bar"),
+						target_path: PathBuf::from("bar"),
 					}],
 				}]),
 				want: Ok(()),
@@ -166,9 +166,8 @@ mod tests {
 				node_before: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: default_base_dir.clone(),
-						link_name: OsString::from("bar"),
-						path: PathBuf::from("bar"),
+						link_path: default_base_dir.join("bar"),
+						target_path: PathBuf::from("bar"),
 					}],
 				}]),
 				input: (PathBuf::from("foo/test"), Link::default()),
@@ -176,14 +175,12 @@ mod tests {
 					path: PathBuf::from("foo"),
 					children: vec![
 						Node::Leaf {
-							base_dir: default_base_dir.clone(),
-							link_name: OsString::from("bar"),
-							path: PathBuf::from("bar"),
+							link_path: default_base_dir.join("bar"),
+							target_path: PathBuf::from("bar"),
 						},
 						Node::Leaf {
-							base_dir: default_base_dir.clone(),
-							link_name: OsString::from("test"),
-							path: PathBuf::from("test"),
+							link_path: default_base_dir.join("test"),
+							target_path: PathBuf::from("test"),
 						},
 					],
 				}]),
@@ -192,15 +189,13 @@ mod tests {
 			Test {
 				description: "leaf exists for simple node",
 				node_before: Node::Root(vec![Node::Leaf {
-					base_dir: default_base_dir.clone(),
-					link_name: OsString::from("foo"),
-					path: PathBuf::from("foo"),
+					link_path: default_base_dir.join("foo"),
+					target_path: PathBuf::from("foo"),
 				}]),
 				input: (PathBuf::from("foo"), Link::default()),
 				node_after: Node::Root(vec![Node::Leaf {
-					base_dir: default_base_dir.clone(),
-					link_name: OsString::from("foo"),
-					path: PathBuf::from("foo"),
+					link_path: default_base_dir.join("foo"),
+					target_path: PathBuf::from("foo"),
 				}]),
 				want: Err(AddError::LeafExists(PathBuf::from("foo"))),
 			},
@@ -209,18 +204,16 @@ mod tests {
 				node_before: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: default_base_dir.clone(),
-						link_name: OsString::from("bar"),
-						path: PathBuf::from("bar"),
+						link_path: default_base_dir.join("bar"),
+						target_path: PathBuf::from("bar"),
 					}],
 				}]),
 				input: (PathBuf::from("foo"), Link::default()),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: default_base_dir.clone(),
-						link_name: OsString::from("bar"),
-						path: PathBuf::from("bar"),
+						link_path: default_base_dir.join("bar"),
+						target_path: PathBuf::from("bar"),
 					}],
 				}]),
 				want: Err(AddError::LeafExists(PathBuf::from("foo"))),
@@ -236,9 +229,8 @@ mod tests {
 					},
 				),
 				node_after: Node::Root(vec![Node::Leaf {
-					base_dir: default_base_dir.clone(),
-					link_name: OsString::from("new_name"),
-					path: PathBuf::from("foo"),
+					link_path: default_base_dir.join("new_name"),
+					target_path: PathBuf::from("foo"),
 				}]),
 				want: Ok(()),
 			},
@@ -255,9 +247,8 @@ mod tests {
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: default_base_dir.clone(),
-						link_name: OsString::from("new_name"),
-						path: PathBuf::from("bar"),
+						link_path: default_base_dir.join("new_name"),
+						target_path: PathBuf::from("bar"),
 					}],
 				}]),
 				want: Ok(()),
@@ -273,9 +264,8 @@ mod tests {
 					},
 				),
 				node_after: Node::Root(vec![Node::Leaf {
-					base_dir: default_base_dir.clone(),
-					link_name: OsString::from("foo"),
-					path: PathBuf::from("foo"),
+					link_path: default_base_dir.join("foo"),
+					target_path: PathBuf::from("foo"),
 				}]),
 				want: Ok(()),
 			},
@@ -292,9 +282,8 @@ mod tests {
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: default_base_dir.clone(),
-						link_name: OsString::from("bar"),
-						path: PathBuf::from("bar"),
+						link_path: default_base_dir.join("bar"),
+						target_path: PathBuf::from("bar"),
 					}],
 				}]),
 				want: Ok(()),
@@ -310,9 +299,8 @@ mod tests {
 					},
 				),
 				node_after: Node::Root(vec![Node::Leaf {
-					base_dir: PathBuf::from("alt_base_dir"),
-					link_name: OsString::from("foo"),
-					path: PathBuf::from("foo"),
+					link_path: PathBuf::from("alt_base_dir").join("foo"),
+					target_path: PathBuf::from("foo"),
 				}]),
 				want: Ok(()),
 			},
@@ -329,9 +317,8 @@ mod tests {
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: PathBuf::from("alt_base_dir"),
-						link_name: OsString::from("bar"),
-						path: PathBuf::from("bar"),
+						link_path: PathBuf::from("alt_base_dir").join("bar"),
+						target_path: PathBuf::from("bar"),
 					}],
 				}]),
 				want: Ok(()),

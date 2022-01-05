@@ -167,19 +167,16 @@ impl<'a> Display for Tree {
 					}
 				}
 				Node::Leaf {
-					path,
-					base_dir,
-					link_name,
+					target_path,
+					link_path,
 				} => {
 					indent(f, indent_boundaries)?;
 
-					let full_path = base_dir.join(link_name);
-
 					writeln!(
 						f,
-						"{path} <- {full_path}",
-						path = path.to_string_lossy(),
-						full_path = full_path.to_string_lossy(),
+						"{target_path} <- {link_path}",
+						target_path = target_path.to_string_lossy(),
+						link_path = link_path.to_string_lossy(),
 					)?;
 				}
 			}
@@ -226,9 +223,8 @@ mod tests {
 				),
 				want: Ok(Tree {
 					root: Node::Root(vec![Node::Leaf {
-						base_dir: PathBuf::new(),
-						link_name: OsString::from("foo"),
-						path: PathBuf::from("foo"),
+						link_path: PathBuf::new().join("foo"),
+						target_path: PathBuf::from("foo"),
 					}]),
 				}),
 			},
@@ -247,9 +243,8 @@ mod tests {
 					root: Node::Root(vec![Node::Branch {
 						path: PathBuf::from("foo"),
 						children: vec![Node::Leaf {
-							base_dir: PathBuf::new(),
-							link_name: OsString::from("bar"),
-							path: PathBuf::from("bar"),
+							link_path: PathBuf::new().join("bar"),
+							target_path: PathBuf::from("bar"),
 						}],
 					}]),
 				}),
@@ -273,9 +268,8 @@ mod tests {
 				),
 				want: Ok(Tree {
 					root: Node::Root(vec![Node::Leaf {
-						base_dir: PathBuf::new(),
-						link_name: OsString::from("new_name"),
-						path: PathBuf::from("foo"),
+						link_path: PathBuf::new().join("new_name"),
+						target_path: PathBuf::from("foo"),
 					}]),
 				}),
 			},
@@ -324,9 +318,8 @@ mod tests {
 				),
 				want: Ok(Tree {
 					root: Node::Root(vec![Node::Leaf {
-						base_dir: PathBuf::new(),
-						link_name: OsString::from("foo"),
-						path: PathBuf::from("foo"),
+						link_path: PathBuf::new().join("foo"),
+						target_path: PathBuf::from("foo"),
 					}]),
 				}),
 			},
@@ -352,9 +345,8 @@ mod tests {
 				),
 				want: Ok(Tree {
 					root: Node::Root(vec![Node::Leaf {
-						base_dir: PathBuf::new(),
-						link_name: OsString::from("foo"),
-						path: PathBuf::from("foo"),
+						link_path: PathBuf::new().join("foo"),
+						target_path: PathBuf::from("foo"),
 					}]),
 				}),
 			},
@@ -402,9 +394,8 @@ mod tests {
 				),
 				want: Ok(Tree {
 					root: Node::Root(vec![Node::Leaf {
-						base_dir: PathBuf::new(),
-						link_name: OsString::from("foo"),
-						path: PathBuf::from("foo"),
+						link_path: PathBuf::new().join("foo"),
+						target_path: PathBuf::from("foo"),
 					}]),
 				}),
 			},
@@ -424,17 +415,15 @@ mod tests {
 				Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: PathBuf::new(),
-						link_name: OsString::from("bar"),
-						path: PathBuf::from("bar"),
+						link_path: PathBuf::new().join("bar"),
+						target_path: PathBuf::from("bar"),
 					}],
 				},
 				Node::Branch {
 					path: PathBuf::from("qux"),
 					children: vec![Node::Leaf {
-						base_dir: PathBuf::new(),
-						link_name: OsString::from("quux"),
-						path: PathBuf::from("quux"),
+						link_path: PathBuf::new().join("quux"),
+						target_path: PathBuf::from("quux"),
 					}],
 				},
 			]),
@@ -449,45 +438,39 @@ mod tests {
 					Node::Branch {
 						path: PathBuf::from("foo"),
 						children: vec![Node::Leaf {
-							base_dir: PathBuf::new(),
-							link_name: OsString::from("bar"),
-							path: PathBuf::from("bar"),
+							link_path: PathBuf::new().join("bar"),
+							target_path: PathBuf::from("bar"),
 						}],
 					},
 					Node::Branch {
 						path: PathBuf::from("qux"),
 						children: vec![Node::Leaf {
-							base_dir: PathBuf::new(),
-							link_name: OsString::from("quux"),
-							path: PathBuf::from("quux"),
+							link_path: PathBuf::new().join("quux"),
+							target_path: PathBuf::from("quux"),
 						}],
 					},
 				]),
 				&Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: PathBuf::new(),
-						link_name: OsString::from("bar"),
-						path: PathBuf::from("bar"),
+						link_path: PathBuf::new().join("bar"),
+						target_path: PathBuf::from("bar"),
 					}],
 				},
 				&Node::Leaf {
-					base_dir: PathBuf::new(),
-					link_name: OsString::from("bar"),
-					path: PathBuf::from("bar"),
+					link_path: PathBuf::new().join("bar"),
+					target_path: PathBuf::from("bar"),
 				},
 				&Node::Branch {
 					path: PathBuf::from("qux"),
 					children: vec![Node::Leaf {
-						base_dir: PathBuf::new(),
-						link_name: OsString::from("quux"),
-						path: PathBuf::from("quux"),
+						link_path: PathBuf::new().join("quux"),
+						target_path: PathBuf::from("quux"),
 					}],
 				},
 				&Node::Leaf {
-					base_dir: PathBuf::new(),
-					link_name: OsString::from("quux"),
-					path: PathBuf::from("quux"),
+					link_path: PathBuf::new().join("quux"),
+					target_path: PathBuf::from("quux"),
 				},
 			]
 		);
@@ -500,17 +483,15 @@ mod tests {
 				Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: PathBuf::new(),
-						link_name: OsString::from("bar"),
-						path: PathBuf::from("bar"),
+						link_path: PathBuf::new().join("bar"),
+						target_path: PathBuf::from("bar"),
 					}],
 				},
 				Node::Branch {
 					path: PathBuf::from("qux"),
 					children: vec![Node::Leaf {
-						base_dir: PathBuf::from("test"),
-						link_name: OsString::from("quux"),
-						path: PathBuf::from("quux"),
+						link_path: PathBuf::from("test").join("quux"),
+						target_path: PathBuf::from("quux"),
 					}],
 				},
 			]),
