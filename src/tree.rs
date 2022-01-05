@@ -172,22 +172,15 @@ impl<'a> Display for Tree {
 					link_name,
 				} => {
 					indent(f, indent_boundaries)?;
-					if !base_dir.as_os_str().is_empty() {
-						writeln!(
-							f,
-							"{path} <- {base_dir:?}/{link_name}",
-							path = path.to_string_lossy(),
-							base_dir = base_dir,
-							link_name = link_name.to_string_lossy()
-						)?;
-					} else {
-						writeln!(
-							f,
-							"{path} <- {link_name}",
-							path = path.to_string_lossy(),
-							link_name = link_name.to_string_lossy()
-						)?;
-					}
+
+					let full_path = base_dir.join(link_name);
+
+					writeln!(
+						f,
+						"{path} <- {full_path}",
+						path = path.to_string_lossy(),
+						full_path = full_path.to_string_lossy(),
+					)?;
 				}
 			}
 
@@ -515,7 +508,7 @@ mod tests {
 				Node::Branch {
 					path: PathBuf::from("qux"),
 					children: vec![Node::Leaf {
-						base_dir: PathBuf::new(),
+						base_dir: PathBuf::from("test"),
 						link_name: OsString::from("quux"),
 						path: PathBuf::from("quux"),
 					}],
@@ -533,7 +526,7 @@ mod tests {
 				"├── foo\n",
 				"│   └── bar <- bar\n",
 				"└── qux\n",
-				"    └── quux <- quux\n",
+				"    └── quux <- test/quux\n",
 			)
 		);
 	}
