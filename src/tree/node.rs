@@ -1,6 +1,6 @@
 use std::{
 	ffi::{OsStr, OsString},
-	path::PathBuf,
+	path::{Path, PathBuf},
 };
 
 use thiserror::Error;
@@ -48,7 +48,7 @@ pub enum Node {
 
 impl Node {
 	/// Adds a path to the node if and only if a node for that path doesn't exist yet.
-	pub fn add(&mut self, path: PathBuf, link: Link) -> AddResult {
+	pub fn add(&mut self, default_base_dir: &Path, path: PathBuf, link: Link) -> AddResult {
 		// Let's break the path into segments.
 		let segments = path.iter().collect::<Vec<&OsStr>>();
 
@@ -77,25 +77,23 @@ impl Node {
 
 						children.push(Self::Leaf {
 							path: segment.into(),
-							base_dir,
-							link_name: if link_name.is_empty() {
-								segment.into()
-							} else {
-								link_name
-							},
+							base_dir: base_dir.unwrap_or_else(|| default_base_dir.into()),
+							link_name: link_name
+								.filter(|link_name| !link_name.is_empty())
+								.unwrap_or_else(|| segment.into()),
 						});
 					} else {
 						let rest = rest.iter().collect();
 
 						if let Some(branch) = child {
-							branch.add(rest, link)?;
+							branch.add(default_base_dir, rest, link)?;
 						} else {
 							let mut branch = Node::Branch {
 								path: segment.into(),
 								children: Vec::new(),
 							};
 
-							branch.add(rest, link)?;
+							branch.add(default_base_dir, rest, link)?;
 							children.push(branch);
 						}
 					}
@@ -127,10 +125,12 @@ mod tests {
 
 	#[test]
 	fn test_add() {
+		let default_base_dir = PathBuf::from("default_base_dir");
+
 		struct Test<'a> {
 			description: &'a str,
 			node_before: Node,
-			input: (PathBuf, AddOverrides),
+			input: (PathBuf, Link),
 			node_after: Node,
 			want: AddResult,
 		}
@@ -139,9 +139,9 @@ mod tests {
 			Test {
 				description: "simple first node",
 				node_before: Node::Root(Vec::new()),
-				input: (PathBuf::from("foo"), (None, None)),
+				input: (PathBuf::from("foo"), Link::default()),
 				node_after: Node::Root(vec![Node::Leaf {
-					base_dir: BaseDir::Config,
+					base_dir: default_base_dir.clone(),
 					link_name: OsString::from("foo"),
 					path: PathBuf::from("foo"),
 				}]),
@@ -150,11 +150,11 @@ mod tests {
 			Test {
 				description: "simple nested node",
 				node_before: Node::Root(Vec::new()),
-				input: (PathBuf::from("foo/bar"), (None, None)),
+				input: (PathBuf::from("foo/bar"), Link::default()),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: BaseDir::Config,
+						base_dir: default_base_dir.clone(),
 						link_name: OsString::from("bar"),
 						path: PathBuf::from("bar"),
 					}],
@@ -166,22 +166,22 @@ mod tests {
 				node_before: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: BaseDir::Config,
+						base_dir: default_base_dir.clone(),
 						link_name: OsString::from("bar"),
 						path: PathBuf::from("bar"),
 					}],
 				}]),
-				input: (PathBuf::from("foo/test"), (None, None)),
+				input: (PathBuf::from("foo/test"), Link::default()),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![
 						Node::Leaf {
-							base_dir: BaseDir::Config,
+							base_dir: default_base_dir.clone(),
 							link_name: OsString::from("bar"),
 							path: PathBuf::from("bar"),
 						},
 						Node::Leaf {
-							base_dir: BaseDir::Config,
+							base_dir: default_base_dir.clone(),
 							link_name: OsString::from("test"),
 							path: PathBuf::from("test"),
 						},
@@ -192,13 +192,13 @@ mod tests {
 			Test {
 				description: "leaf exists for simple node",
 				node_before: Node::Root(vec![Node::Leaf {
-					base_dir: BaseDir::Config,
+					base_dir: default_base_dir.clone(),
 					link_name: OsString::from("foo"),
 					path: PathBuf::from("foo"),
 				}]),
-				input: (PathBuf::from("foo"), (None, None)),
+				input: (PathBuf::from("foo"), Link::default()),
 				node_after: Node::Root(vec![Node::Leaf {
-					base_dir: BaseDir::Config,
+					base_dir: default_base_dir.clone(),
 					link_name: OsString::from("foo"),
 					path: PathBuf::from("foo"),
 				}]),
@@ -209,16 +209,16 @@ mod tests {
 				node_before: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: BaseDir::Config,
+						base_dir: default_base_dir.clone(),
 						link_name: OsString::from("bar"),
 						path: PathBuf::from("bar"),
 					}],
 				}]),
-				input: (PathBuf::from("foo"), (None, None)),
+				input: (PathBuf::from("foo"), Link::default()),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: BaseDir::Config,
+						base_dir: default_base_dir.clone(),
 						link_name: OsString::from("bar"),
 						path: PathBuf::from("bar"),
 					}],
@@ -230,10 +230,13 @@ mod tests {
 				node_before: Node::Root(Vec::new()),
 				input: (
 					PathBuf::from("foo"),
-					(None, Some(OsString::from("new_name"))),
+					Link {
+						name: Some(OsString::from("new_name")),
+						..Link::default()
+					},
 				),
 				node_after: Node::Root(vec![Node::Leaf {
-					base_dir: BaseDir::Config,
+					base_dir: default_base_dir.clone(),
 					link_name: OsString::from("new_name"),
 					path: PathBuf::from("foo"),
 				}]),
@@ -244,12 +247,15 @@ mod tests {
 				node_before: Node::Root(Vec::new()),
 				input: (
 					PathBuf::from("foo/bar"),
-					(None, Some(OsString::from("new_name"))),
+					Link {
+						name: Some(OsString::from("new_name")),
+						..Link::default()
+					},
 				),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: BaseDir::Config,
+						base_dir: default_base_dir.clone(),
 						link_name: OsString::from("new_name"),
 						path: PathBuf::from("bar"),
 					}],
@@ -259,9 +265,15 @@ mod tests {
 			Test {
 				description: "empty link name for simple first node",
 				node_before: Node::Root(Vec::new()),
-				input: (PathBuf::from("foo"), (None, Some(OsString::new()))),
+				input: (
+					PathBuf::from("foo"),
+					Link {
+						name: Some(OsString::new()),
+						..Link::default()
+					},
+				),
 				node_after: Node::Root(vec![Node::Leaf {
-					base_dir: BaseDir::Config,
+					base_dir: default_base_dir.clone(),
 					link_name: OsString::from("foo"),
 					path: PathBuf::from("foo"),
 				}]),
@@ -270,11 +282,17 @@ mod tests {
 			Test {
 				description: "empty link name for nested node",
 				node_before: Node::Root(Vec::new()),
-				input: (PathBuf::from("foo/bar"), (None, Some(OsString::new()))),
+				input: (
+					PathBuf::from("foo/bar"),
+					Link {
+						name: Some(OsString::new()),
+						..Link::default()
+					},
+				),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: BaseDir::Config,
+						base_dir: default_base_dir.clone(),
 						link_name: OsString::from("bar"),
 						path: PathBuf::from("bar"),
 					}],
@@ -284,9 +302,15 @@ mod tests {
 			Test {
 				description: "different base directory for simple first node",
 				node_before: Node::Root(Vec::new()),
-				input: (PathBuf::from("foo"), (Some(BaseDir::Home), None)),
+				input: (
+					PathBuf::from("foo"),
+					Link {
+						base_dir: Some(PathBuf::from("alt_base_dir")),
+						..Link::default()
+					},
+				),
 				node_after: Node::Root(vec![Node::Leaf {
-					base_dir: BaseDir::Home,
+					base_dir: PathBuf::from("alt_base_dir"),
 					link_name: OsString::from("foo"),
 					path: PathBuf::from("foo"),
 				}]),
@@ -295,11 +319,17 @@ mod tests {
 			Test {
 				description: "empty link name for nested node",
 				node_before: Node::Root(Vec::new()),
-				input: (PathBuf::from("foo/bar"), (Some(BaseDir::Home), None)),
+				input: (
+					PathBuf::from("foo/bar"),
+					Link {
+						base_dir: Some(PathBuf::from("alt_base_dir")),
+						..Link::default()
+					},
+				),
 				node_after: Node::Root(vec![Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![Node::Leaf {
-						base_dir: BaseDir::Home,
+						base_dir: PathBuf::from("alt_base_dir"),
 						link_name: OsString::from("bar"),
 						path: PathBuf::from("bar"),
 					}],
@@ -309,7 +339,9 @@ mod tests {
 		];
 
 		for mut case in test_cases {
-			let got = case.node_before.add(case.input.0, case.input.1);
+			let got = case
+				.node_before
+				.add(&default_base_dir, case.input.0, case.input.1);
 
 			assert_eq!(got, case.want, "bad result for {:?}", case.description);
 			assert_eq!(
