@@ -9,6 +9,7 @@ use crate::config::{Config, Defaults, TagSet, Tags, Target};
 use self::node::NodeRef;
 use self::node::{AddError, Node};
 
+mod iter;
 mod node;
 
 /// Structure representing all dotfiles after reading a configuration for Park.
