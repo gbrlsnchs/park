@@ -1,10 +1,12 @@
 use std::{
+	cell::RefCell,
 	fmt::{Display, Formatter, Result as FmtResult},
-	vec::IntoIter,
+	rc::Rc,
 };
 
 use crate::config::{Config, Defaults, TagSet, Tags, Target};
 
+use self::node::NodeRef;
 use self::node::{AddError, Node};
 
 mod node;
@@ -12,7 +14,7 @@ mod node;
 /// Structure representing all dotfiles after reading a configuration for Park.
 #[derive(Debug, PartialEq)]
 struct Tree {
-	pub(super) root: Node,
+	pub(super) root: NodeRef,
 }
 
 impl<'a> Tree {
@@ -21,7 +23,7 @@ impl<'a> Tree {
 		let targets = config.targets;
 
 		let mut tree = Tree {
-			root: Node::Root(Vec::with_capacity(targets.len())),
+			root: Rc::new(RefCell::new(Node::Root(Vec::with_capacity(targets.len())))),
 		};
 
 		let Defaults {
@@ -63,37 +65,11 @@ impl<'a> Tree {
 			}
 
 			tree.root
+				.borrow_mut()
 				.add(default_base_dir, target_path, link.unwrap_or_default())?;
 		}
 
 		Ok(tree)
-	}
-}
-
-impl<'a> IntoIterator for &'a Tree {
-	type Item = &'a Node;
-	type IntoIter = IntoIter<&'a Node>;
-
-	/// Returns a depth first iterator.
-	fn into_iter(self) -> Self::IntoIter {
-		/// Recursively builds a stack of nodes using depth first search.
-		fn append<'a>(stack: &mut Vec<&'a Node>, node: &'a Node) {
-			stack.push(node);
-
-			match node {
-				Node::Root(children) | Node::Branch { children, .. } => {
-					for child in children {
-						append(stack, child);
-					}
-				}
-				_ => {}
-			}
-		}
-
-		let mut stack = vec![];
-		append(&mut stack, &self.root);
-
-		stack.into_iter()
 	}
 }
 
@@ -152,7 +128,7 @@ impl<'a> Display for Tree {
 
 					for (idx, child) in children.iter().enumerate() {
 						indent_boundaries.push(idx == children.len() - 1);
-						write(f, child, indent_boundaries)?;
+						write(f, &child.borrow(), indent_boundaries)?;
 						indent_boundaries.pop();
 					}
 				}
@@ -162,13 +138,14 @@ impl<'a> Display for Tree {
 
 					for (idx, child) in children.iter().enumerate() {
 						indent_boundaries.push(idx == children.len() - 1);
-						write(f, child, indent_boundaries)?;
+						write(f, &child.borrow(), indent_boundaries)?;
 						indent_boundaries.pop();
 					}
 				}
 				Node::Leaf {
 					target_path,
 					link_path,
+					..
 				} => {
 					indent(f, indent_boundaries)?;
 
@@ -184,7 +161,7 @@ impl<'a> Display for Tree {
 			Ok(())
 		}
 
-		write(f, &self.root, &mut indent_boundaries)?;
+		write(f, &self.root.borrow(), &mut indent_boundaries)?;
 
 		Ok(())
 	}
@@ -197,7 +174,10 @@ mod tests {
 	use maplit::{btreemap, hashset};
 	use pretty_assertions::assert_eq;
 
-	use crate::config::{Link, Tags};
+	use crate::{
+		config::{Link, Tags},
+		tree::node::Status,
+	};
 
 	use super::*;
 
@@ -222,10 +202,11 @@ mod tests {
 					hashset! {},
 				),
 				want: Ok(Tree {
-					root: Node::Root(vec![Node::Leaf {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::new().join("foo"),
 						target_path: PathBuf::from("foo"),
-					}]),
+						status: Status::Unknown,
+					})])),
 				}),
 			},
 			Test {
@@ -240,13 +221,14 @@ mod tests {
 					hashset! {},
 				),
 				want: Ok(Tree {
-					root: Node::Root(vec![Node::Branch {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Branch {
 						path: PathBuf::from("foo"),
-						children: vec![Node::Leaf {
+						children: vec![Node::new_ref(Node::Leaf {
 							link_path: PathBuf::new().join("bar"),
 							target_path: PathBuf::from("bar"),
-						}],
-					}]),
+							status: Status::Unknown,
+						})],
+					})])),
 				}),
 			},
 			Test {
@@ -267,10 +249,11 @@ mod tests {
 					hashset! {},
 				),
 				want: Ok(Tree {
-					root: Node::Root(vec![Node::Leaf {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::new().join("new_name"),
 						target_path: PathBuf::from("foo"),
-					}]),
+						status: Status::Unknown,
+					})])),
 				}),
 			},
 			Test {
@@ -294,7 +277,7 @@ mod tests {
 					},
 				),
 				want: Ok(Tree {
-					root: Node::Root(vec![]),
+					root: Node::new_ref(Node::Root(vec![])),
 				}),
 			},
 			Test {
@@ -317,10 +300,11 @@ mod tests {
 					},
 				),
 				want: Ok(Tree {
-					root: Node::Root(vec![Node::Leaf {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::new().join("foo"),
 						target_path: PathBuf::from("foo"),
-					}]),
+						status: Status::Unknown,
+					})])),
 				}),
 			},
 			Test {
@@ -344,10 +328,11 @@ mod tests {
 					},
 				),
 				want: Ok(Tree {
-					root: Node::Root(vec![Node::Leaf {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::new().join("foo"),
 						target_path: PathBuf::from("foo"),
-					}]),
+						status: Status::Unknown,
+					})])),
 				}),
 			},
 			Test {
@@ -370,7 +355,7 @@ mod tests {
 					},
 				),
 				want: Ok(Tree {
-					root: Node::Root(vec![]),
+					root: Node::new_ref(Node::Root(vec![])),
 				}),
 			},
 			Test {
@@ -393,10 +378,11 @@ mod tests {
 					},
 				),
 				want: Ok(Tree {
-					root: Node::Root(vec![Node::Leaf {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::new().join("foo"),
 						target_path: PathBuf::from("foo"),
-					}]),
+						status: Status::Unknown,
+					})])),
 				}),
 			},
 		];
@@ -409,92 +395,26 @@ mod tests {
 	}
 
 	#[test]
-	fn depth_first_iterator() {
-		let tree = Tree {
-			root: Node::Root(vec![
-				Node::Branch {
-					path: PathBuf::from("foo"),
-					children: vec![Node::Leaf {
-						link_path: PathBuf::new().join("bar"),
-						target_path: PathBuf::from("bar"),
-					}],
-				},
-				Node::Branch {
-					path: PathBuf::from("qux"),
-					children: vec![Node::Leaf {
-						link_path: PathBuf::new().join("quux"),
-						target_path: PathBuf::from("quux"),
-					}],
-				},
-			]),
-		};
-
-		let got = tree.into_iter().collect::<Vec<&Node>>();
-
-		assert_eq!(
-			got,
-			vec![
-				&Node::Root(vec![
-					Node::Branch {
-						path: PathBuf::from("foo"),
-						children: vec![Node::Leaf {
-							link_path: PathBuf::new().join("bar"),
-							target_path: PathBuf::from("bar"),
-						}],
-					},
-					Node::Branch {
-						path: PathBuf::from("qux"),
-						children: vec![Node::Leaf {
-							link_path: PathBuf::new().join("quux"),
-							target_path: PathBuf::from("quux"),
-						}],
-					},
-				]),
-				&Node::Branch {
-					path: PathBuf::from("foo"),
-					children: vec![Node::Leaf {
-						link_path: PathBuf::new().join("bar"),
-						target_path: PathBuf::from("bar"),
-					}],
-				},
-				&Node::Leaf {
-					link_path: PathBuf::new().join("bar"),
-					target_path: PathBuf::from("bar"),
-				},
-				&Node::Branch {
-					path: PathBuf::from("qux"),
-					children: vec![Node::Leaf {
-						link_path: PathBuf::new().join("quux"),
-						target_path: PathBuf::from("quux"),
-					}],
-				},
-				&Node::Leaf {
-					link_path: PathBuf::new().join("quux"),
-					target_path: PathBuf::from("quux"),
-				},
-			]
-		);
-	}
-
-	#[test]
 	fn format_tree() {
 		let tree = Tree {
-			root: Node::Root(vec![
-				Node::Branch {
+			root: Node::new_ref(Node::Root(vec![
+				Node::new_ref(Node::Branch {
 					path: PathBuf::from("foo"),
-					children: vec![Node::Leaf {
+					children: vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::new().join("bar"),
 						target_path: PathBuf::from("bar"),
-					}],
-				},
-				Node::Branch {
+						status: Status::Unknown,
+					})],
+				}),
+				Node::new_ref(Node::Branch {
 					path: PathBuf::from("qux"),
-					children: vec![Node::Leaf {
+					children: vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::from("test").join("quux"),
 						target_path: PathBuf::from("quux"),
-					}],
-				},
-			]),
+						status: Status::Unknown,
+					})],
+				}),
+			])),
 		};
 
 		println!("{}", tree);

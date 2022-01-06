@@ -1,6 +1,8 @@
 use std::{
-	ffi::{OsStr, OsString},
+	cell::RefCell,
+	ffi::OsStr,
 	path::{Path, PathBuf},
+	rc::Rc,
 };
 
 use thiserror::Error;
@@ -23,17 +25,32 @@ pub enum AddError {
 /// Alias for the result when adding to a node.
 pub type AddResult = Result<(), AddError>;
 
+/// Possible states a link node can be in.
+#[derive(Debug, PartialEq)]
+pub enum Status {
+	/// Unknown state, probably because the node wasn't analyzed.
+	Unknown,
+	/// The target can by symlinked without any conflicts.
+	Ready,
+	/// The target is already symlinked accordingly.
+	Done,
+	/// Another file already exists in the link path.
+	Conflict,
+}
+
+pub type NodeRef = Rc<RefCell<Node>>;
+
 /// A segment of path in Park's tree structure.
 #[derive(Debug, PartialEq)]
 pub enum Node {
 	/// The root of the tree, has no paths, only nodes.
-	Root(Vec<Node>),
+	Root(Vec<NodeRef>),
 	/// Nodes that are branches simply hold other nodes and are never used as targets.
 	Branch {
 		/// Segment path for the branch.
 		path: PathBuf,
 		/// Nodes under the branch. May be leaves or other branches.
-		children: Vec<Node>,
+		children: Vec<NodeRef>,
 	},
 	/// These nodes are used as targets. They can't become branches.
 	Leaf {
@@ -41,10 +58,17 @@ pub enum Node {
 		target_path: PathBuf,
 		/// The base directory of the link.
 		link_path: PathBuf,
+		/// Status of the link.
+		status: Status,
 	},
 }
 
 impl Node {
+	/// Helper to return a node inside a RefCell inside an Rc.
+	pub fn new_ref(node: Node) -> NodeRef {
+		Rc::new(RefCell::new(node))
+	}
+
 	/// Adds a path to the node if and only if a node for that path doesn't exist yet.
 	pub fn add(&mut self, default_base_dir: &Path, path: PathBuf, link: Link) -> AddResult {
 		// Let's break the path into segments.
@@ -58,7 +82,11 @@ impl Node {
 				Self::Root(children) | Self::Branch { children, .. } => {
 					// Let's check whether there's already a node with same path, otherwise let's
 					// just create it, if needed.
-					let child = children.iter_mut().find(|node| node.get_path() == segment);
+					let child = children.iter().find(|node_ref| {
+						let node = node_ref.borrow();
+
+						node.get_path() == segment
+					});
 					let is_leaf = rest.is_empty();
 
 					if is_leaf {
@@ -78,14 +106,16 @@ impl Node {
 							.filter(|link_name| !link_name.is_empty())
 							.unwrap_or_else(|| segment.into());
 
-						children.push(Self::Leaf {
+						children.push(Self::new_ref(Self::Leaf {
 							target_path: segment.into(),
 							link_path: base_dir.join(link_name),
-						});
+							status: Status::Unknown,
+						}));
 					} else {
 						let rest = rest.iter().collect();
 
-						if let Some(branch) = child {
+						if let Some(branch_ref) = child {
+							let mut branch = branch_ref.borrow_mut();
 							branch.add(default_base_dir, rest, link)?;
 						} else {
 							let mut branch = Node::Branch {
@@ -94,7 +124,7 @@ impl Node {
 							};
 
 							branch.add(default_base_dir, rest, link)?;
-							children.push(branch);
+							children.push(Rc::new(RefCell::new(branch)));
 						}
 					}
 				}
@@ -106,21 +136,37 @@ impl Node {
 		Ok(())
 	}
 
+	pub fn set_status(&mut self) {
+		match self {
+			Self::Leaf { .. } => {}
+			_ => {}
+		}
+	}
+
 	/// Returns the segment path for the node. Root panics.
 	// TODO(gbrlsnchs): Add unit tests.
 	fn get_path(&self) -> PathBuf {
 		match self {
 			Self::Leaf {
 				target_path: path, ..
-			} => path.into(),
-			Self::Branch { path, .. } => path.into(),
+			}
+			| Self::Branch { path, .. } => path.into(),
 			_ => panic!("Can't get path for root node."),
+		}
+	}
+
+	pub fn get_children(&self) -> Option<Vec<NodeRef>> {
+		match self {
+			Node::Root(children) | Node::Branch { children, .. } => Some(children.to_vec()),
+			_ => None,
 		}
 	}
 }
 
 #[cfg(test)]
 mod tests {
+	use std::ffi::OsString;
+
 	use pretty_assertions::assert_eq;
 
 	use super::*;
@@ -142,80 +188,89 @@ mod tests {
 				description: "simple first node",
 				node_before: Node::Root(Vec::new()),
 				input: (PathBuf::from("foo"), Link::default()),
-				node_after: Node::Root(vec![Node::Leaf {
+				node_after: Node::Root(vec![Node::new_ref(Node::Leaf {
 					link_path: default_base_dir.join("foo"),
 					target_path: PathBuf::from("foo"),
-				}]),
+					status: Status::Unknown,
+				})]),
 				want: Ok(()),
 			},
 			Test {
 				description: "simple nested node",
 				node_before: Node::Root(Vec::new()),
 				input: (PathBuf::from("foo/bar"), Link::default()),
-				node_after: Node::Root(vec![Node::Branch {
+				node_after: Node::Root(vec![Node::new_ref(Node::Branch {
 					path: PathBuf::from("foo"),
-					children: vec![Node::Leaf {
+					children: vec![Node::new_ref(Node::Leaf {
 						link_path: default_base_dir.join("bar"),
 						target_path: PathBuf::from("bar"),
-					}],
-				}]),
+						status: Status::Unknown,
+					})],
+				})]),
 				want: Ok(()),
 			},
 			Test {
 				description: "simple node to existing branch",
-				node_before: Node::Root(vec![Node::Branch {
+				node_before: Node::Root(vec![Node::new_ref(Node::Branch {
 					path: PathBuf::from("foo"),
-					children: vec![Node::Leaf {
+					children: vec![Node::new_ref(Node::Leaf {
 						link_path: default_base_dir.join("bar"),
 						target_path: PathBuf::from("bar"),
-					}],
-				}]),
+						status: Status::Unknown,
+					})],
+				})]),
 				input: (PathBuf::from("foo/test"), Link::default()),
-				node_after: Node::Root(vec![Node::Branch {
+				node_after: Node::Root(vec![Node::new_ref(Node::Branch {
 					path: PathBuf::from("foo"),
 					children: vec![
-						Node::Leaf {
+						Node::new_ref(Node::Leaf {
 							link_path: default_base_dir.join("bar"),
 							target_path: PathBuf::from("bar"),
-						},
-						Node::Leaf {
+							status: Status::Unknown,
+						}),
+						Node::new_ref(Node::Leaf {
 							link_path: default_base_dir.join("test"),
 							target_path: PathBuf::from("test"),
-						},
+							status: Status::Unknown,
+						}),
 					],
-				}]),
+				})]),
 				want: Ok(()),
 			},
 			Test {
 				description: "leaf exists for simple node",
-				node_before: Node::Root(vec![Node::Leaf {
+				node_before: Node::Root(vec![Node::new_ref(Node::Leaf {
 					link_path: default_base_dir.join("foo"),
 					target_path: PathBuf::from("foo"),
-				}]),
+					status: Status::Unknown,
+				})]),
 				input: (PathBuf::from("foo"), Link::default()),
-				node_after: Node::Root(vec![Node::Leaf {
+				node_after: Node::Root(vec![Node::new_ref(Node::Leaf {
 					link_path: default_base_dir.join("foo"),
 					target_path: PathBuf::from("foo"),
-				}]),
+					status: Status::Unknown,
+				})]),
 				want: Err(AddError::LeafExists(PathBuf::from("foo"))),
 			},
 			Test {
 				description: "leaf exists for nested node",
-				node_before: Node::Root(vec![Node::Branch {
+				node_before: Node::Root(vec![Node::new_ref(Node::Branch {
 					path: PathBuf::from("foo"),
-					children: vec![Node::Leaf {
+					children: vec![Node::new_ref(Node::Leaf {
 						link_path: default_base_dir.join("bar"),
 						target_path: PathBuf::from("bar"),
-					}],
-				}]),
+						status: Status::Unknown,
+					})],
+				})]),
 				input: (PathBuf::from("foo"), Link::default()),
-				node_after: Node::Root(vec![Node::Branch {
+				node_after: Node::Root(vec![Node::new_ref(Node::Branch {
 					path: PathBuf::from("foo"),
-					children: vec![Node::Leaf {
+					children: vec![Node::new_ref(Node::Leaf {
 						link_path: default_base_dir.join("bar"),
 						target_path: PathBuf::from("bar"),
-					}],
-				}]),
+						status: Status::Unknown,
+					})],
+				})]),
 				want: Err(AddError::LeafExists(PathBuf::from("foo"))),
 			},
 			Test {
@@ -228,10 +283,11 @@ mod tests {
 						..Link::default()
 					},
 				),
-				node_after: Node::Root(vec![Node::Leaf {
+				node_after: Node::Root(vec![Node::new_ref(Node::Leaf {
 					link_path: default_base_dir.join("new_name"),
 					target_path: PathBuf::from("foo"),
-				}]),
+					status: Status::Unknown,
+				})]),
 				want: Ok(()),
 			},
 			Test {
@@ -244,13 +300,14 @@ mod tests {
 						..Link::default()
 					},
 				),
-				node_after: Node::Root(vec![Node::Branch {
+				node_after: Node::Root(vec![Node::new_ref(Node::Branch {
 					path: PathBuf::from("foo"),
-					children: vec![Node::Leaf {
+					children: vec![Node::new_ref(Node::Leaf {
 						link_path: default_base_dir.join("new_name"),
 						target_path: PathBuf::from("bar"),
-					}],
-				}]),
+						status: Status::Unknown,
+					})],
+				})]),
 				want: Ok(()),
 			},
 			Test {
@@ -263,10 +320,11 @@ mod tests {
 						..Link::default()
 					},
 				),
-				node_after: Node::Root(vec![Node::Leaf {
+				node_after: Node::Root(vec![Node::new_ref(Node::Leaf {
 					link_path: default_base_dir.join("foo"),
 					target_path: PathBuf::from("foo"),
-				}]),
+					status: Status::Unknown,
+				})]),
 				want: Ok(()),
 			},
 			Test {
@@ -279,13 +337,14 @@ mod tests {
 						..Link::default()
 					},
 				),
-				node_after: Node::Root(vec![Node::Branch {
+				node_after: Node::Root(vec![Node::new_ref(Node::Branch {
 					path: PathBuf::from("foo"),
-					children: vec![Node::Leaf {
+					children: vec![Node::new_ref(Node::Leaf {
 						link_path: default_base_dir.join("bar"),
 						target_path: PathBuf::from("bar"),
-					}],
-				}]),
+						status: Status::Unknown,
+					})],
+				})]),
 				want: Ok(()),
 			},
 			Test {
@@ -298,10 +357,11 @@ mod tests {
 						..Link::default()
 					},
 				),
-				node_after: Node::Root(vec![Node::Leaf {
+				node_after: Node::Root(vec![Node::new_ref(Node::Leaf {
 					link_path: PathBuf::from("alt_base_dir").join("foo"),
 					target_path: PathBuf::from("foo"),
-				}]),
+					status: Status::Unknown,
+				})]),
 				want: Ok(()),
 			},
 			Test {
@@ -314,13 +374,14 @@ mod tests {
 						..Link::default()
 					},
 				),
-				node_after: Node::Root(vec![Node::Branch {
+				node_after: Node::Root(vec![Node::new_ref(Node::Branch {
 					path: PathBuf::from("foo"),
-					children: vec![Node::Leaf {
+					children: vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::from("alt_base_dir").join("bar"),
 						target_path: PathBuf::from("bar"),
-					}],
-				}]),
+						status: Status::Unknown,
+					})],
+				})]),
 				want: Ok(()),
 			},
 		];
