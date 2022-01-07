@@ -173,7 +173,7 @@ impl<'a> Display for Tree {
 						indent_boundaries.pop();
 					}
 				}
-				Node::Branch { path, children, .. } => {
+				Node::Branch { path, children } => {
 					indent(f, indent_boundaries)?;
 					writeln!(f, "{}", path.to_string_lossy())?;
 
@@ -247,7 +247,6 @@ mod tests {
 						link_path: PathBuf::from("foo"),
 						target_path: PathBuf::from("foo"),
 						status: Status::Unknown,
-						depth: 1,
 					})])),
 				}),
 			},
@@ -269,9 +268,7 @@ mod tests {
 							link_path: PathBuf::from("bar"),
 							target_path: PathBuf::from("bar"),
 							status: Status::Unknown,
-							depth: 2,
 						})],
-						depth: 1,
 					})])),
 				}),
 			},
@@ -297,7 +294,6 @@ mod tests {
 						link_path: PathBuf::from("new_name"),
 						target_path: PathBuf::from("foo"),
 						status: Status::Unknown,
-						depth: 1,
 					})])),
 				}),
 			},
@@ -349,7 +345,6 @@ mod tests {
 						link_path: PathBuf::from("foo"),
 						target_path: PathBuf::from("foo"),
 						status: Status::Unknown,
-						depth: 1,
 					})])),
 				}),
 			},
@@ -378,7 +373,6 @@ mod tests {
 						link_path: PathBuf::from("foo"),
 						target_path: PathBuf::from("foo"),
 						status: Status::Unknown,
-						depth: 1,
 					})])),
 				}),
 			},
@@ -429,7 +423,6 @@ mod tests {
 						link_path: PathBuf::from("foo"),
 						target_path: PathBuf::from("foo"),
 						status: Status::Unknown,
-						depth: 1,
 					})])),
 				}),
 			},
@@ -457,7 +450,6 @@ mod tests {
 					link_path: PathBuf::from("foo"),
 					target_path: PathBuf::from("foo"),
 					status: Status::Unknown,
-					depth: 1,
 				})])),
 			},
 			output: Tree {
@@ -465,7 +457,6 @@ mod tests {
 					link_path: PathBuf::from("foo"),
 					target_path: PathBuf::from("foo"),
 					status: Status::Ready,
-					depth: 1,
 				})])),
 			},
 		}];
@@ -491,9 +482,7 @@ mod tests {
 						link_path: PathBuf::from("bar"),
 						target_path: PathBuf::from("bar"),
 						status: Status::Unknown,
-						depth: 2,
 					})],
-					depth: 1,
 				}),
 				Node::new_ref(Node::Branch {
 					path: PathBuf::from("qux"),
@@ -501,9 +490,7 @@ mod tests {
 						link_path: PathBuf::from("test").join("quux"),
 						target_path: PathBuf::from("quux"),
 						status: Status::Unknown,
-						depth: 2,
 					})],
-					depth: 1,
 				}),
 			])),
 		};

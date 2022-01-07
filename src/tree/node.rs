@@ -51,8 +51,6 @@ pub enum Node {
 		path: PathBuf,
 		/// Nodes under the branch. May be leaves or other branches.
 		children: Vec<NodeRef>,
-		/// The node's depth inside the tree.
-		depth: usize,
 	},
 	/// These nodes are used as targets. They can't become branches.
 	Leaf {
@@ -62,8 +60,6 @@ pub enum Node {
 		link_path: PathBuf,
 		/// Status of the link.
 		status: Status,
-		/// The node's depth inside the tree.
-		depth: usize,
 	},
 }
 
@@ -82,78 +78,59 @@ impl Node {
 		if let Some((segment, rest)) = segments.split_first() {
 			let segment = *segment;
 
-			let mut children = None;
-			let mut depth = 0_usize;
+			match self {
+				Self::Root(children) | Self::Branch { children, .. } => {
+					// Let's check whether there's already a node with same path, otherwise let's
+					// just create it, if needed.
+					let child = children.iter().find(|node_ref| {
+						let node = node_ref.borrow();
 
-			if let Self::Root(root_children) = self {
-				children = Some(root_children);
-			} else if let Self::Branch {
-				children: branch_children,
-				depth: branch_depth,
-				..
-			} = self
-			{
-				children = Some(branch_children);
-				depth = *branch_depth;
-			}
+						node.get_path() == segment
+					});
+					let is_leaf = rest.is_empty();
 
-			// TODO: Add test case.
-			if children.is_none() {
-				return Err(AddError::LeafAsBranch(segment.into()));
-			}
+					if is_leaf {
+						let leaf_exists = child.is_some();
 
-			let children = children.unwrap();
+						if leaf_exists {
+							return Err(AddError::LeafExists(segment.into()));
+						}
 
-			// Let's check whether there's already a node with same path, otherwise let's
-			// just create it, if needed.
-			let child = children.iter().find(|node_ref| {
-				let node = node_ref.borrow();
+						let Link {
+							base_dir,
+							name: link_name,
+						} = link;
 
-				node.get_path() == segment
-			});
-			let is_leaf = rest.is_empty();
+						let base_dir = base_dir.unwrap_or_else(|| default_base_dir.into());
+						let link_name = link_name
+							.filter(|link_name| !link_name.is_empty())
+							.unwrap_or_else(|| segment.into());
 
-			if is_leaf {
-				let leaf_exists = child.is_some();
+						children.push(Self::new_ref(Self::Leaf {
+							target_path: segment.into(),
+							link_path: base_dir.join(link_name),
+							status: Status::Unknown,
+						}));
+					} else {
+						let rest = rest.iter().collect();
 
-				// TODO: Add test case.
-				if leaf_exists {
-					return Err(AddError::LeafExists(segment.into()));
+						if let Some(branch_ref) = child {
+							let mut branch = branch_ref.borrow_mut();
+							branch.add(default_base_dir, rest, link)?;
+						} else {
+							let mut branch = Node::Branch {
+								path: segment.into(),
+								children: Vec::new(),
+							};
+
+							branch.add(default_base_dir, rest, link)?;
+							children.push(Rc::new(RefCell::new(branch)));
+						}
+					}
 				}
-
-				let Link {
-					base_dir,
-					name: link_name,
-				} = link;
-
-				let base_dir = base_dir.unwrap_or_else(|| default_base_dir.into());
-				let link_name = link_name
-					.filter(|link_name| !link_name.is_empty())
-					.unwrap_or_else(|| segment.into());
-
-				children.push(Self::new_ref(Self::Leaf {
-					target_path: segment.into(),
-					link_path: base_dir.join(link_name),
-					status: Status::Unknown,
-					depth: depth + 1,
-				}));
-			} else {
-				let rest = rest.iter().collect();
-
-				if let Some(branch_ref) = child {
-					let mut branch = branch_ref.borrow_mut();
-					branch.add(default_base_dir, rest, link)?;
-				} else {
-					let mut branch = Node::Branch {
-						path: segment.into(),
-						children: Vec::new(),
-						depth: depth + 1,
-					};
-
-					branch.add(default_base_dir, rest, link)?;
-					children.push(Rc::new(RefCell::new(branch)));
-				}
-			}
+				// We only support adding new nodes to nodes that are not leaves!
+				_ => return Err(AddError::LeafAsBranch(segment.into())),
+			};
 		}
 
 		Ok(())
@@ -208,7 +185,6 @@ mod tests {
 					link_path: default_base_dir.join("foo"),
 					target_path: PathBuf::from("foo"),
 					status: Status::Unknown,
-					depth: 1,
 				})]),
 				want: Ok(()),
 			},
@@ -222,9 +198,7 @@ mod tests {
 						link_path: default_base_dir.join("bar"),
 						target_path: PathBuf::from("bar"),
 						status: Status::Unknown,
-						depth: 2,
 					})],
-					depth: 1,
 				})]),
 				want: Ok(()),
 			},
@@ -236,9 +210,7 @@ mod tests {
 						link_path: default_base_dir.join("bar"),
 						target_path: PathBuf::from("bar"),
 						status: Status::Unknown,
-						depth: 2,
 					})],
-					depth: 1,
 				})]),
 				input: (PathBuf::from("foo/test"), Link::default()),
 				node_after: Node::Root(vec![Node::new_ref(Node::Branch {
@@ -248,16 +220,13 @@ mod tests {
 							link_path: default_base_dir.join("bar"),
 							target_path: PathBuf::from("bar"),
 							status: Status::Unknown,
-							depth: 2,
 						}),
 						Node::new_ref(Node::Leaf {
 							link_path: default_base_dir.join("test"),
 							target_path: PathBuf::from("test"),
 							status: Status::Unknown,
-							depth: 2,
 						}),
 					],
-					depth: 1,
 				})]),
 				want: Ok(()),
 			},
@@ -267,14 +236,12 @@ mod tests {
 					link_path: default_base_dir.join("foo"),
 					target_path: PathBuf::from("foo"),
 					status: Status::Unknown,
-					depth: 1,
 				})]),
 				input: (PathBuf::from("foo"), Link::default()),
 				node_after: Node::Root(vec![Node::new_ref(Node::Leaf {
 					link_path: default_base_dir.join("foo"),
 					target_path: PathBuf::from("foo"),
 					status: Status::Unknown,
-					depth: 1,
 				})]),
 				want: Err(AddError::LeafExists(PathBuf::from("foo"))),
 			},
@@ -286,9 +253,7 @@ mod tests {
 						link_path: default_base_dir.join("bar"),
 						target_path: PathBuf::from("bar"),
 						status: Status::Unknown,
-						depth: 2,
 					})],
-					depth: 1,
 				})]),
 				input: (PathBuf::from("foo"), Link::default()),
 				node_after: Node::Root(vec![Node::new_ref(Node::Branch {
@@ -297,9 +262,7 @@ mod tests {
 						link_path: default_base_dir.join("bar"),
 						target_path: PathBuf::from("bar"),
 						status: Status::Unknown,
-						depth: 2,
 					})],
-					depth: 1,
 				})]),
 				want: Err(AddError::LeafExists(PathBuf::from("foo"))),
 			},
@@ -317,7 +280,6 @@ mod tests {
 					link_path: default_base_dir.join("new_name"),
 					target_path: PathBuf::from("foo"),
 					status: Status::Unknown,
-					depth: 1,
 				})]),
 				want: Ok(()),
 			},
@@ -337,9 +299,7 @@ mod tests {
 						link_path: default_base_dir.join("new_name"),
 						target_path: PathBuf::from("bar"),
 						status: Status::Unknown,
-						depth: 2,
 					})],
-					depth: 1,
 				})]),
 				want: Ok(()),
 			},
@@ -357,7 +317,6 @@ mod tests {
 					link_path: default_base_dir.join("foo"),
 					target_path: PathBuf::from("foo"),
 					status: Status::Unknown,
-					depth: 1,
 				})]),
 				want: Ok(()),
 			},
@@ -377,9 +336,7 @@ mod tests {
 						link_path: default_base_dir.join("bar"),
 						target_path: PathBuf::from("bar"),
 						status: Status::Unknown,
-						depth: 2,
 					})],
-					depth: 1,
 				})]),
 				want: Ok(()),
 			},
@@ -397,7 +354,6 @@ mod tests {
 					link_path: PathBuf::from("alt_base_dir").join("foo"),
 					target_path: PathBuf::from("foo"),
 					status: Status::Unknown,
-					depth: 1,
 				})]),
 				want: Ok(()),
 			},
@@ -417,9 +373,7 @@ mod tests {
 						link_path: PathBuf::from("alt_base_dir").join("bar"),
 						target_path: PathBuf::from("bar"),
 						status: Status::Unknown,
-						depth: 2,
 					})],
-					depth: 1,
 				})]),
 				want: Ok(()),
 			},
