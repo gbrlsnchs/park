@@ -7,9 +7,9 @@ pub struct DepthFirstIter {
 }
 
 impl DepthFirstIter {
-	pub fn new(root: Node) -> Self {
+	pub fn new(root_ref: NodeRef) -> Self {
 		DepthFirstIter {
-			stack: vec![Node::new_ref(root)],
+			stack: vec![root_ref],
 		}
 	}
 }
@@ -61,7 +61,7 @@ mod tests {
 			}),
 		]);
 
-		let iter = DepthFirstIter::new(root);
+		let iter = DepthFirstIter::new(Node::new_ref(root));
 		let got = iter.collect::<Vec<NodeRef>>();
 
 		assert_eq!(

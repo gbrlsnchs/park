@@ -136,13 +136,6 @@ impl Node {
 		Ok(())
 	}
 
-	pub fn set_status(&mut self) {
-		match self {
-			Self::Leaf { .. } => {}
-			_ => {}
-		}
-	}
-
 	/// Returns the segment path for the node. Root panics.
 	// TODO(gbrlsnchs): Add unit tests.
 	fn get_path(&self) -> PathBuf {
