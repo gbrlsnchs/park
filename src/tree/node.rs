@@ -138,12 +138,12 @@ impl Node {
 
 	/// Returns the segment path for the node. Root panics.
 	// TODO(gbrlsnchs): Add unit tests.
-	fn get_path(&self) -> PathBuf {
+	fn get_path(&self) -> &Path {
 		match self {
 			Self::Leaf {
 				target_path: path, ..
 			}
-			| Self::Branch { path, .. } => path.into(),
+			| Self::Branch { path, .. } => path,
 			_ => panic!("Can't get path for root node."),
 		}
 	}
