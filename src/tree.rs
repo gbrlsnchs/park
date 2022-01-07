@@ -161,13 +161,14 @@ impl<'a> Display for Tree {
 				Node::Leaf {
 					target_path,
 					link_path,
-					..
+					status,
 				} => {
 					writeln!(
 						f,
-						"{target_path} <- {link_path}",
+						"{target_path} <- {link_path} ({status:?})",
 						target_path = target_path.to_string_lossy(),
-						link_path = link_path.to_string_lossy()
+						link_path = link_path.to_string_lossy(),
+						status = status,
 					)?;
 				}
 				_ => {}
@@ -473,9 +474,9 @@ mod tests {
 			concat!(
 				".\n",
 				"├── foo\n",
-				"│   └── bar <- bar\n",
+				"│   └── bar <- bar (Unknown)\n",
 				"└── qux\n",
-				"    └── quux <- test/quux\n",
+				"    └── quux <- test/quux (Unknown)\n",
 			)
 		);
 	}
