@@ -9,8 +9,11 @@ use crate::{
 	tree::node::Status,
 };
 
-use self::node::{AddError, Node};
 use self::{iter::DepthFirstIter, node::NodeRef};
+use self::{
+	iter::NodeEntry,
+	node::{AddError, Node},
+};
 
 mod iter;
 mod node;
@@ -79,7 +82,7 @@ impl<'a> Tree {
 	/// Analyze the tree's nodes in order to check viability for symlinks to be done.
 	/// This means it will iterate the tree and update each node's status.
 	pub fn analyze(&self) {
-		for node_ref in self {
+		for NodeEntry { node_ref, .. } in self {
 			let mut node = node_ref.borrow_mut();
 
 			match &mut *node {
@@ -106,7 +109,7 @@ impl<'a> Tree {
 }
 
 impl<'a> IntoIterator for &'a Tree {
-	type Item = NodeRef;
+	type Item = NodeEntry;
 	type IntoIter = DepthFirstIter;
 
 	fn into_iter(self) -> Self::IntoIter {
@@ -116,93 +119,60 @@ impl<'a> IntoIterator for &'a Tree {
 
 impl<'a> Display for Tree {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-		let mut indent_boundaries = Vec::new();
+		let mut indent_blocks = Vec::<bool>::new();
 
-		/// This will build the line for the node, filling it with correct symbols, like in
-		///
-		/// \ \ .
-		/// \ \ ├── A
-		/// \ \ │   └── B
-		/// \ \ ├── C
-		/// \ \ └── D
-		/// \ \ \    └── E
-		///
-		///  where "│   └── B" is considered a line, for example.
-		fn indent<'a>(f: &mut Formatter<'_>, indent_boundaries: &'a mut Vec<bool>) -> FmtResult {
-			let mut prefix;
-			for (idx, is_last) in indent_boundaries.iter().enumerate() {
-				let is_boundary = *is_last;
-				let is_rightmost = idx == indent_boundaries.len() - 1;
+		for NodeEntry {
+			deepest,
+			level,
+			node_ref,
+		} in self
+		{
+			let node = node_ref.borrow();
 
-				if !is_rightmost {
-					prefix = "│";
+			if let Node::Root(..) = *node {
+				writeln!(f, ".")?;
 
-					if is_boundary {
-						prefix = " ";
-					}
-
-					write!(f, "{}   ", prefix)?;
-
-					continue;
-				}
-
-				prefix = "├";
-
-				if is_boundary {
-					prefix = "└";
-				}
-
-				write!(f, "{}── ", prefix)?;
+				continue;
 			}
 
-			Ok(())
-		}
+			while level <= indent_blocks.len() {
+				indent_blocks.pop();
+			}
 
-		fn write<'a>(
-			f: &mut Formatter<'_>,
-			node: &'a Node,
-			indent_boundaries: &'a mut Vec<bool>,
-		) -> FmtResult {
-			match node {
-				Node::Root(children) => {
-					writeln!(f, ".")?;
+			indent_blocks.push(deepest);
 
-					for (idx, child) in children.iter().enumerate() {
-						indent_boundaries.push(idx == children.len() - 1);
-						write(f, &child.borrow(), indent_boundaries)?;
-						indent_boundaries.pop();
-					}
-				}
-				Node::Branch { path, children } => {
-					indent(f, indent_boundaries)?;
+			for (idx, has_indent_guide) in indent_blocks.iter().enumerate() {
+				let is_leaf = idx == level - 1;
+
+				let segment = match (has_indent_guide, is_leaf) {
+					(true, true) => "└── ",
+					(false, true) => "├── ",
+					(true, _) => "    ",
+					(false, _) => "│   ",
+				};
+
+				write!(f, "{}", segment)?;
+			}
+
+			match &*node {
+				Node::Branch { path, .. } => {
 					writeln!(f, "{}", path.to_string_lossy())?;
-
-					for (idx, child) in children.iter().enumerate() {
-						indent_boundaries.push(idx == children.len() - 1);
-						write(f, &child.borrow(), indent_boundaries)?;
-						indent_boundaries.pop();
-					}
 				}
 				Node::Leaf {
 					target_path,
 					link_path,
 					..
 				} => {
-					indent(f, indent_boundaries)?;
-
 					writeln!(
 						f,
 						"{target_path} <- {link_path}",
 						target_path = target_path.to_string_lossy(),
-						link_path = link_path.to_string_lossy(),
+						link_path = link_path.to_string_lossy()
 					)?;
 				}
+				_ => {}
 			}
-
-			Ok(())
 		}
-
-		write(f, &self.root.borrow(), &mut indent_boundaries)?;
 
 		Ok(())
 	}
