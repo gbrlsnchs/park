@@ -49,7 +49,9 @@ mod tests {
 					link_path: PathBuf::new().join("bar"),
 					target_path: PathBuf::from("bar"),
 					status: Status::Unknown,
+					depth: 2,
 				})],
+				depth: 1,
 			}),
 			Node::new_ref(Node::Branch {
 				path: PathBuf::from("qux"),
@@ -57,7 +59,9 @@ mod tests {
 					link_path: PathBuf::new().join("quux"),
 					target_path: PathBuf::from("quux"),
 					status: Status::Unknown,
+					depth: 2,
 				})],
+				depth: 1,
 			}),
 		]);
 
@@ -74,7 +78,9 @@ mod tests {
 							link_path: PathBuf::new().join("bar"),
 							target_path: PathBuf::from("bar"),
 							status: Status::Unknown,
+							depth: 2,
 						})],
+						depth: 1,
 					}),
 					Node::new_ref(Node::Branch {
 						path: PathBuf::from("qux"),
@@ -82,7 +88,9 @@ mod tests {
 							link_path: PathBuf::new().join("quux"),
 							target_path: PathBuf::from("quux"),
 							status: Status::Unknown,
+							depth: 2,
 						})],
+						depth: 1,
 					}),
 				])),
 				Node::new_ref(Node::Branch {
@@ -91,12 +99,15 @@ mod tests {
 						link_path: PathBuf::new().join("bar"),
 						target_path: PathBuf::from("bar"),
 						status: Status::Unknown,
+						depth: 2,
 					})],
+					depth: 1,
 				}),
 				Node::new_ref(Node::Leaf {
 					link_path: PathBuf::new().join("bar"),
 					target_path: PathBuf::from("bar"),
 					status: Status::Unknown,
+					depth: 2,
 				}),
 				Node::new_ref(Node::Branch {
 					path: PathBuf::from("qux"),
@@ -104,12 +115,15 @@ mod tests {
 						link_path: PathBuf::new().join("quux"),
 						target_path: PathBuf::from("quux"),
 						status: Status::Unknown,
+						depth: 2
 					})],
+					depth: 1,
 				}),
 				Node::new_ref(Node::Leaf {
 					link_path: PathBuf::new().join("quux"),
 					target_path: PathBuf::from("quux"),
 					status: Status::Unknown,
+					depth: 2,
 				}),
 			]
 		);
