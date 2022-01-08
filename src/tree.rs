@@ -175,7 +175,7 @@ impl<'a> Display for Tree {
 					link_path,
 					status,
 				} => {
-					let status_str = format!("({:?})", status);
+					let status_str = format!("({:?})", status).to_uppercase();
 					let status = match status {
 						Status::Unknown => Colour::Yellow.paint(status_str),
 						Status::Done => Colour::Blue.paint(status_str),
@@ -531,10 +531,10 @@ mod tests {
 					└── corge                   
 					    └── gralt <- test/gralt {conflict}
 				"},
-				unknown = Colour::Yellow.paint("(Unknown)"),
-				done = Colour::Blue.paint("(Done)"),
-				ready = Colour::Green.paint("(Ready)"),
-				conflict = Colour::Red.paint("(Conflict)"),
+				unknown = Colour::Yellow.paint("(UNKNOWN)"),
+				done = Colour::Blue.paint("(DONE)"),
+				ready = Colour::Green.paint("(READY)"),
+				conflict = Colour::Red.paint("(CONFLICT)"),
 			)
 		);
 	}
