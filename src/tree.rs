@@ -1,7 +1,7 @@
 use std::{
 	cell::RefCell,
 	fmt::{Display, Error as FmtError, Formatter, Result as FmtResult},
-	io::Write,
+	io::{Error as IoError, Write},
 	rc::Rc,
 	str::from_utf8,
 };
@@ -86,7 +86,7 @@ impl<'a> Tree {
 
 	/// Analyze the tree's nodes in order to check viability for symlinks to be done.
 	/// This means it will iterate the tree and update each node's status.
-	pub fn analyze(&self) {
+	pub fn analyze(&self) -> Result<(), IoError> {
 		for NodeEntry { node_ref, .. } in self {
 			let mut node = node_ref.borrow_mut();
 
@@ -98,18 +98,36 @@ impl<'a> Tree {
 				}
 				Node::Leaf {
 					target_path,
+					link_path,
 					status,
-					..
 				} => {
-					if target_path.exists() {
-						*status = Status::Conflict;
-					} else {
-						*status = Status::Ready;
+					let existing_target_path = link_path.read_link();
+
+					if existing_target_path.is_err() {
+						*status = if link_path.exists() {
+							Status::Conflict
+						} else {
+							Status::Ready
+						};
+
+						continue;
 					}
+
+					let existing_target_path = existing_target_path.unwrap();
+
+					if existing_target_path == *target_path {
+						*status = Status::Done;
+
+						continue;
+					}
+
+					*status = Status::Conflict;
 				}
 				_ => {}
 			}
 		}
+
+		Ok(())
 	}
 }
 
@@ -439,33 +457,69 @@ mod tests {
 	}
 
 	#[test]
-	fn analyze() {
+	fn analyze_tree() -> Result<(), IoError> {
 		struct Test<'a> {
 			description: &'a str,
 			input: Tree,
 			output: Tree,
 		}
 
-		let test_cases = vec![Test {
-			description: "single target should be ready",
-			input: Tree {
-				root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
-					link_path: PathBuf::from("foo"),
-					target_path: PathBuf::from("foo"),
-					status: Status::Unknown,
-				})])),
+		let test_cases = vec![
+			Test {
+				description: "single target should be ready",
+				input: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						link_path: PathBuf::from("foo"),
+						target_path: PathBuf::from("foo"),
+						status: Status::Unknown,
+					})])),
+				},
+				output: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						link_path: PathBuf::from("foo"),
+						target_path: PathBuf::from("foo"),
+						status: Status::Ready,
+					})])),
+				},
 			},
-			output: Tree {
-				root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
-					link_path: PathBuf::from("foo"),
-					target_path: PathBuf::from("foo"),
-					status: Status::Ready,
-				})])),
+			Test {
+				description: "single target has conflict",
+				input: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						link_path: PathBuf::from("README.md"),
+						target_path: PathBuf::from("Cargo.toml"),
+						status: Status::Unknown,
+					})])),
+				},
+				output: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						link_path: PathBuf::from("README.md"),
+						target_path: PathBuf::from("Cargo.toml"),
+						status: Status::Conflict,
+					})])),
+				},
 			},
-		}];
+			Test {
+				description: "single target with existing link",
+				input: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						link_path: PathBuf::from("tests/data/something"),
+						target_path: PathBuf::from("something"),
+						status: Status::Unknown,
+					})])),
+				},
+				output: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						link_path: PathBuf::from("tests/data/something"),
+						target_path: PathBuf::from("something"),
+						status: Status::Done,
+					})])),
+				},
+			},
+		];
 
 		for case in test_cases {
-			case.input.analyze();
+			case.input.analyze()?;
 
 			assert_eq!(
 				case.input, case.output,
@@ -473,6 +527,8 @@ mod tests {
 				case.description
 			);
 		}
+
+		Ok(())
 	}
 
 	#[test]
