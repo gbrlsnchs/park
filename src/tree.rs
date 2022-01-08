@@ -186,7 +186,7 @@ impl<'a> Display for Tree {
 					if writeln!(
 						tab_writer,
 						"{target_path} <- {link_path}\t{status}",
-						target_path = target_path.to_string_lossy(),
+						target_path = target_path.file_name().unwrap().to_string_lossy(),
 						link_path = link_path.to_string_lossy(),
 						status = status,
 					)
@@ -269,7 +269,7 @@ mod tests {
 						path: PathBuf::from("foo"),
 						children: vec![Node::new_ref(Node::Leaf {
 							link_path: PathBuf::from("bar"),
-							target_path: PathBuf::from("bar"),
+							target_path: PathBuf::from("foo/bar"),
 							status: Status::Unknown,
 						})],
 					})])),
@@ -483,7 +483,7 @@ mod tests {
 					path: PathBuf::from("foo"),
 					children: vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::from("bar"),
-						target_path: PathBuf::from("bar"),
+						target_path: PathBuf::from("foo/bar"),
 						status: Status::Unknown,
 					})],
 				}),
@@ -491,7 +491,7 @@ mod tests {
 					path: PathBuf::from("baz"),
 					children: vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::from("test").join("qux"),
-						target_path: PathBuf::from("qux"),
+						target_path: PathBuf::from("baz/qux"),
 						status: Status::Done,
 					})],
 				}),
@@ -499,7 +499,7 @@ mod tests {
 					path: PathBuf::from("quux"),
 					children: vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::from("quuz"),
-						target_path: PathBuf::from("quuz"),
+						target_path: PathBuf::from("quux/quuz"),
 						status: Status::Ready,
 					})],
 				}),
@@ -507,7 +507,7 @@ mod tests {
 					path: PathBuf::from("corge"),
 					children: vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::from("test").join("gralt"),
-						target_path: PathBuf::from("gralt"),
+						target_path: PathBuf::from("corge/gralt"),
 						status: Status::Conflict,
 					})],
 				}),

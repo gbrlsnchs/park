@@ -78,59 +78,76 @@ impl Node {
 		if let Some((segment, rest)) = segments.split_first() {
 			let segment = *segment;
 
+			if let Self::Leaf { .. } = self {
+				return Err(AddError::LeafAsBranch(segment.into()));
+			}
+
+			let target_path;
+			let children;
 			match self {
-				Self::Root(children) | Self::Branch { children, .. } => {
-					// Let's check whether there's already a node with same path, otherwise let's
-					// just create it, if needed.
-					let child = children.iter().find(|node_ref| {
-						let node = node_ref.borrow();
-
-						node.get_path() == segment
-					});
-					let is_leaf = rest.is_empty();
-
-					if is_leaf {
-						let leaf_exists = child.is_some();
-
-						if leaf_exists {
-							return Err(AddError::LeafExists(segment.into()));
-						}
-
-						let Link {
-							base_dir,
-							name: link_name,
-						} = link;
-
-						let base_dir = base_dir.unwrap_or_else(|| default_base_dir.into());
-						let link_name = link_name
-							.filter(|link_name| !link_name.is_empty())
-							.unwrap_or_else(|| segment.into());
-
-						children.push(Self::new_ref(Self::Leaf {
-							target_path: segment.into(),
-							link_path: base_dir.join(link_name),
-							status: Status::Unknown,
-						}));
-					} else {
-						let rest = rest.iter().collect();
-
-						if let Some(branch_ref) = child {
-							let mut branch = branch_ref.borrow_mut();
-							branch.add(default_base_dir, rest, link)?;
-						} else {
-							let mut branch = Node::Branch {
-								path: segment.into(),
-								children: Vec::new(),
-							};
-
-							branch.add(default_base_dir, rest, link)?;
-							children.push(Rc::new(RefCell::new(branch)));
-						}
-					}
+				Self::Root(root_children) => {
+					children = root_children;
+					target_path = PathBuf::new();
 				}
-				// We only support adding new nodes to nodes that are not leaves!
-				_ => return Err(AddError::LeafAsBranch(segment.into())),
+				Self::Branch {
+					children: branch_children,
+					path,
+				} => {
+					children = branch_children;
+					target_path = path.to_path_buf();
+				}
+				_ => unreachable!(),
 			};
+
+			// Let's check whether there's already a node with same path, otherwise let's
+			// just create it, if needed.
+			let child = children.iter().find(|node_ref| {
+				let node = node_ref.borrow();
+
+				node.get_path()
+					.file_name()
+					.map_or(false, |file_name| file_name == segment)
+			});
+			let is_leaf = rest.is_empty();
+
+			if is_leaf {
+				let leaf_exists = child.is_some();
+
+				if leaf_exists {
+					return Err(AddError::LeafExists(segment.into()));
+				}
+
+				let Link {
+					base_dir,
+					name: link_name,
+				} = link;
+
+				let base_dir = base_dir.unwrap_or_else(|| default_base_dir.into());
+				let link_name = link_name
+					.filter(|link_name| !link_name.is_empty())
+					.unwrap_or_else(|| segment.into());
+
+				children.push(Self::new_ref(Self::Leaf {
+					target_path: target_path.join(segment),
+					link_path: base_dir.join(link_name),
+					status: Status::Unknown,
+				}));
+			} else {
+				let rest = rest.iter().collect();
+
+				if let Some(branch_ref) = child {
+					let mut branch = branch_ref.borrow_mut();
+					branch.add(default_base_dir, rest, link)?;
+				} else {
+					let mut branch = Node::Branch {
+						path: segment.into(),
+						children: Vec::new(),
+					};
+
+					branch.add(default_base_dir, rest, link)?;
+					children.push(Rc::new(RefCell::new(branch)));
+				}
+			}
 		}
 
 		Ok(())
@@ -144,7 +161,7 @@ impl Node {
 				target_path: path, ..
 			}
 			| Self::Branch { path, .. } => path,
-			_ => panic!("Can't get path for root node."),
+			_ => unreachable!(),
 		}
 	}
 
@@ -196,7 +213,7 @@ mod tests {
 					path: PathBuf::from("foo"),
 					children: vec![Node::new_ref(Node::Leaf {
 						link_path: default_base_dir.join("bar"),
-						target_path: PathBuf::from("bar"),
+						target_path: PathBuf::from("foo/bar"),
 						status: Status::Unknown,
 					})],
 				})]),
@@ -208,7 +225,7 @@ mod tests {
 					path: PathBuf::from("foo"),
 					children: vec![Node::new_ref(Node::Leaf {
 						link_path: default_base_dir.join("bar"),
-						target_path: PathBuf::from("bar"),
+						target_path: PathBuf::from("foo/bar"),
 						status: Status::Unknown,
 					})],
 				})]),
@@ -218,12 +235,12 @@ mod tests {
 					children: vec![
 						Node::new_ref(Node::Leaf {
 							link_path: default_base_dir.join("bar"),
-							target_path: PathBuf::from("bar"),
+							target_path: PathBuf::from("foo/bar"),
 							status: Status::Unknown,
 						}),
 						Node::new_ref(Node::Leaf {
 							link_path: default_base_dir.join("test"),
-							target_path: PathBuf::from("test"),
+							target_path: PathBuf::from("foo/test"),
 							status: Status::Unknown,
 						}),
 					],
@@ -297,7 +314,7 @@ mod tests {
 					path: PathBuf::from("foo"),
 					children: vec![Node::new_ref(Node::Leaf {
 						link_path: default_base_dir.join("new_name"),
-						target_path: PathBuf::from("bar"),
+						target_path: PathBuf::from("foo/bar"),
 						status: Status::Unknown,
 					})],
 				})]),
@@ -334,7 +351,7 @@ mod tests {
 					path: PathBuf::from("foo"),
 					children: vec![Node::new_ref(Node::Leaf {
 						link_path: default_base_dir.join("bar"),
-						target_path: PathBuf::from("bar"),
+						target_path: PathBuf::from("foo/bar"),
 						status: Status::Unknown,
 					})],
 				})]),
@@ -358,7 +375,7 @@ mod tests {
 				want: Ok(()),
 			},
 			Test {
-				description: "empty link name for nested node",
+				description: "empty link name for nested node with alternative base directory",
 				node_before: Node::Root(Vec::new()),
 				input: (
 					PathBuf::from("foo/bar"),
@@ -371,7 +388,7 @@ mod tests {
 					path: PathBuf::from("foo"),
 					children: vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::from("alt_base_dir").join("bar"),
-						target_path: PathBuf::from("bar"),
+						target_path: PathBuf::from("foo/bar"),
 						status: Status::Unknown,
 					})],
 				})]),
