@@ -6,8 +6,10 @@ edition = "2018"
 
 [dependencies]
 ansi_term = "0.12.1"
+serde = { version = "1.0.133", features = ["derive"] }
 tabwriter = "1.2.1"
 thiserror = "1.0.26"
+toml = "0.5.8"
 
 [dev-dependencies]
 indoc = "1.0.3"

@@ -124,7 +124,7 @@ impl Node {
 
 				let base_dir = base_dir.unwrap_or_else(|| default_base_dir.into());
 				let link_name = link_name
-					.filter(|link_name| !link_name.is_empty())
+					.filter(|link_name| !link_name.as_os_str().is_empty())
 					.unwrap_or_else(|| segment.into());
 
 				children.push(Self::new_ref(Self::Leaf {
@@ -175,8 +175,6 @@ impl Node {
 
 #[cfg(test)]
 mod tests {
-	use std::ffi::OsString;
-
 	use pretty_assertions::assert_eq;
 
 	use super::*;
@@ -289,7 +287,7 @@ mod tests {
 				input: (
 					PathBuf::from("foo"),
 					Link {
-						name: Some(OsString::from("new_name")),
+						name: Some(PathBuf::from("new_name")),
 						..Link::default()
 					},
 				),
@@ -306,7 +304,7 @@ mod tests {
 				input: (
 					PathBuf::from("foo/bar"),
 					Link {
-						name: Some(OsString::from("new_name")),
+						name: Some(PathBuf::from("new_name")),
 						..Link::default()
 					},
 				),
@@ -326,7 +324,7 @@ mod tests {
 				input: (
 					PathBuf::from("foo"),
 					Link {
-						name: Some(OsString::new()),
+						name: Some(PathBuf::new()),
 						..Link::default()
 					},
 				),
@@ -343,7 +341,7 @@ mod tests {
 				input: (
 					PathBuf::from("foo/bar"),
 					Link {
-						name: Some(OsString::new()),
+						name: Some(PathBuf::new()),
 						..Link::default()
 					},
 				),

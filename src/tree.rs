@@ -10,7 +10,7 @@ use ansi_term::Colour;
 use tabwriter::TabWriter;
 
 use crate::{
-	config::{Config, Defaults, TagSet, Tags, Target},
+	config::{Config, TagSet, Tags, Target},
 	tree::node::Status,
 };
 
@@ -32,16 +32,17 @@ struct Tree {
 impl<'a> Tree {
 	/// Parses a configuration and returns a tree based on it.
 	pub fn parse(config: Config, mut runtime_tags: TagSet) -> Result<Self, AddError> {
-		let targets = config.targets;
+		let targets = config.targets.unwrap_or_default();
 
 		let tree = Tree {
 			root: Rc::new(RefCell::new(Node::Root(Vec::with_capacity(targets.len())))),
 		};
 
-		let Defaults {
+		let Config {
 			base_dir: ref default_base_dir,
 			tags: default_tags,
-		} = config.defaults;
+			..
+		} = config;
 
 		if let Some(default_tags) = default_tags {
 			runtime_tags.extend(default_tags);
@@ -230,7 +231,7 @@ impl<'a> Display for Tree {
 
 #[cfg(test)]
 mod tests {
-	use std::{ffi::OsString, path::PathBuf};
+	use std::path::PathBuf;
 
 	use indoc::indoc;
 	use maplit::{btreemap, hashset};
@@ -256,9 +257,9 @@ mod tests {
 				description: "simple config with a single target",
 				input: (
 					Config {
-						targets: btreemap! {
+						targets: Some(btreemap! {
 							PathBuf::from("foo") => Target::default()
-						},
+						}),
 						..Config::default()
 					},
 					hashset! {},
@@ -275,9 +276,9 @@ mod tests {
 				description: "simple config with a nested target",
 				input: (
 					Config {
-						targets: btreemap! {
+						targets: Some(btreemap! {
 							PathBuf::from("foo/bar") => Target::default()
-						},
+						}),
 						..Config::default()
 					},
 					hashset! {},
@@ -297,15 +298,15 @@ mod tests {
 				description: "target with custom options",
 				input: (
 					Config {
-						targets: btreemap! {
+						targets: Some(btreemap! {
 							PathBuf::from("foo") => Target{
 								link: Some(Link{
-									name: Some(OsString::from("new_name")),
+									name: Some(PathBuf::from("new_name")),
 									..Link::default()
 								}),
 								..Target::default()
 							}
-						},
+						}),
 						..Config::default()
 					},
 					hashset! {},
@@ -322,15 +323,15 @@ mod tests {
 				description: "target disabled due to conjunctive tags",
 				input: (
 					Config {
-						targets: btreemap! {
+						targets: Some(btreemap! {
 							PathBuf::from("foo") => Target{
 								tags: Some(Tags{
-									all_of: Some(vec![String::from("test")]),
-									any_of: Some(vec![String::from("foo"), String::from("bar")]),
+									all_of: Some(hashset!{String::from("test")}),
+									any_of: Some(hashset!{String::from("foo"), String::from("bar")}),
 								}),
 								..Target::default()
 							},
-						},
+						}),
 						..Config::default()
 					},
 					hashset! {
@@ -346,15 +347,15 @@ mod tests {
 				description: "target enabled with tags #1",
 				input: (
 					Config {
-						targets: btreemap! {
+						targets: Some(btreemap! {
 							PathBuf::from("foo") => Target{
 								tags: Some(Tags{
-									all_of: Some(vec![String::from("test")]),
+									all_of: Some(hashset!{String::from("test")}),
 									..Tags::default()
 								}),
 								..Target::default()
 							},
-						},
+						}),
 						..Config::default()
 					},
 					hashset! {
@@ -373,15 +374,15 @@ mod tests {
 				description: "target enabled with tags #2",
 				input: (
 					Config {
-						targets: btreemap! {
+						targets: Some(btreemap! {
 							PathBuf::from("foo") => Target{
 								tags: Some(Tags{
-									all_of: Some(vec![String::from("test")]),
-									any_of: Some(vec![String::from("foo"), String::from("bar")]),
+									all_of: Some(hashset!{String::from("test")}),
+									any_of: Some(hashset!{String::from("foo"), String::from("bar")}),
 								}),
 								..Target::default()
 							},
-						},
+						}),
 						..Config::default()
 					},
 					hashset! {
@@ -401,15 +402,15 @@ mod tests {
 				description: "target disabled due to disjunctive tags",
 				input: (
 					Config {
-						targets: btreemap! {
+						targets: Some(btreemap! {
 							PathBuf::from("foo") => Target{
 								tags: Some(Tags{
-									all_of: Some(vec![String::from("test")]),
-									any_of: Some(vec![String::from("foo"), String::from("bar")]),
+									all_of: Some(hashset!{String::from("test")}),
+									any_of: Some(hashset!{String::from("foo"), String::from("bar")}),
 								}),
 								..Target::default()
 							},
-						},
+						}),
 						..Config::default()
 					},
 					hashset! {
@@ -424,15 +425,15 @@ mod tests {
 				description: "target enabled with tags #3",
 				input: (
 					Config {
-						targets: btreemap! {
+						targets: Some(btreemap! {
 							PathBuf::from("foo") => Target{
 								tags: Some(Tags{
-									any_of: Some(vec![String::from("test")]),
+									any_of: Some(hashset!{String::from("test")}),
 									..Tags::default()
 								}),
 								..Target::default()
 							},
-						},
+						}),
 						..Config::default()
 					},
 					hashset! {
