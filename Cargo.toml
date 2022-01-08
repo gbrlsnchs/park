@@ -5,8 +5,10 @@ authors = ["Gabriel Sanches <gabriel@gsr.dev>"]
 edition = "2018"
 
 [dependencies]
+ansi_term = "0.12.1"
 thiserror = "1.0.26"
 
 [dev-dependencies]
+indoc = "1.0.3"
 maplit = "1.0.2"
 pretty_assertions = "0.7.2"

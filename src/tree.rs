@@ -4,6 +4,8 @@ use std::{
 	rc::Rc,
 };
 
+use ansi_term::Colour;
+
 use crate::{
 	config::{Config, Defaults, TagSet, Tags, Target},
 	tree::node::Status,
@@ -163,9 +165,17 @@ impl<'a> Display for Tree {
 					link_path,
 					status,
 				} => {
+					let status_str = format!("({:?})", status);
+					let status = match status {
+						Status::Unknown => Colour::Yellow.paint(status_str),
+						Status::Done => Colour::Blue.paint(status_str),
+						Status::Ready => Colour::Green.paint(status_str),
+						Status::Conflict => Colour::Red.paint(status_str),
+					};
+
 					writeln!(
 						f,
-						"{target_path} <- {link_path} ({status:?})",
+						"{target_path} <- {link_path} {status}",
 						target_path = target_path.to_string_lossy(),
 						link_path = link_path.to_string_lossy(),
 						status = status,
@@ -183,6 +193,7 @@ impl<'a> Display for Tree {
 mod tests {
 	use std::{ffi::OsString, path::PathBuf};
 
+	use indoc::indoc;
 	use maplit::{btreemap, hashset};
 	use pretty_assertions::assert_eq;
 
@@ -456,11 +467,27 @@ mod tests {
 					})],
 				}),
 				Node::new_ref(Node::Branch {
-					path: PathBuf::from("qux"),
+					path: PathBuf::from("baz"),
 					children: vec![Node::new_ref(Node::Leaf {
-						link_path: PathBuf::from("test").join("quux"),
-						target_path: PathBuf::from("quux"),
-						status: Status::Unknown,
+						link_path: PathBuf::from("test").join("qux"),
+						target_path: PathBuf::from("qux"),
+						status: Status::Done,
+					})],
+				}),
+				Node::new_ref(Node::Branch {
+					path: PathBuf::from("quux"),
+					children: vec![Node::new_ref(Node::Leaf {
+						link_path: PathBuf::from("quuz"),
+						target_path: PathBuf::from("quuz"),
+						status: Status::Ready,
+					})],
+				}),
+				Node::new_ref(Node::Branch {
+					path: PathBuf::from("corge"),
+					children: vec![Node::new_ref(Node::Leaf {
+						link_path: PathBuf::from("test").join("gralt"),
+						target_path: PathBuf::from("gralt"),
+						status: Status::Conflict,
 					})],
 				}),
 			])),
@@ -471,12 +498,22 @@ mod tests {
 		// TODO(gbrlsnchs): This can (and should) get better in the future. =)
 		assert_eq!(
 			tree.to_string(),
-			concat!(
-				".\n",
-				"├── foo\n",
-				"│   └── bar <- bar (Unknown)\n",
-				"└── qux\n",
-				"    └── quux <- test/quux (Unknown)\n",
+			format!(
+				indoc! {"
+					.
+					├── foo
+					│   └── bar <- bar {unknown}
+					├── baz
+					│   └── qux <- test/qux {done}
+					├── quux
+					│   └── quuz <- quuz {ready}
+					└── corge
+					    └── gralt <- test/gralt {conflict}
+				"},
+				unknown = Colour::Yellow.paint("(Unknown)"),
+				done = Colour::Blue.paint("(Done)"),
+				ready = Colour::Green.paint("(Ready)"),
+				conflict = Colour::Red.paint("(Conflict)"),
 			)
 		);
 	}
