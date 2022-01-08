@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 ansi_term = "0.12.1"
+tabwriter = "1.2.1"
 thiserror = "1.0.26"
 
 [dev-dependencies]

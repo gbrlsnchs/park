@@ -1,10 +1,13 @@
 use std::{
 	cell::RefCell,
-	fmt::{Display, Formatter, Result as FmtResult},
+	fmt::{Display, Error as FmtError, Formatter, Result as FmtResult},
+	io::Write,
 	rc::Rc,
+	str::from_utf8,
 };
 
 use ansi_term::Colour;
+use tabwriter::TabWriter;
 
 use crate::{
 	config::{Config, Defaults, TagSet, Tags, Target},
@@ -121,6 +124,9 @@ impl<'a> IntoIterator for &'a Tree {
 
 impl<'a> Display for Tree {
 	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+		let table = Vec::new();
+		let mut tab_writer = TabWriter::new(table).padding(1);
+
 		let mut indent_blocks = Vec::<bool>::new();
 
 		for NodeEntry {
@@ -153,12 +159,16 @@ impl<'a> Display for Tree {
 					(false, _) => "│   ",
 				};
 
-				write!(f, "{}", segment)?;
+				if write!(tab_writer, "{}", segment).is_err() {
+					return Err(FmtError);
+				}
 			}
 
 			match &*node {
 				Node::Branch { path, .. } => {
-					writeln!(f, "{}", path.to_string_lossy())?;
+					if writeln!(tab_writer, "{}\t", path.to_string_lossy()).is_err() {
+						return Err(FmtError);
+					};
 				}
 				Node::Leaf {
 					target_path,
@@ -173,15 +183,26 @@ impl<'a> Display for Tree {
 						Status::Conflict => Colour::Red.paint(status_str),
 					};
 
-					writeln!(
-						f,
-						"{target_path} <- {link_path} {status}",
+					if writeln!(
+						tab_writer,
+						"{target_path} <- {link_path}\t{status}",
 						target_path = target_path.to_string_lossy(),
 						link_path = link_path.to_string_lossy(),
 						status = status,
-					)?;
+					)
+					.is_err()
+					{
+						return Err(FmtError);
+					};
 				}
 				_ => {}
+			}
+		}
+
+		match tab_writer.into_inner() {
+			Err(_) => return Err(FmtError),
+			Ok(w) => {
+				write!(f, "{}", from_utf8(&w).unwrap())?;
 			}
 		}
 
@@ -501,13 +522,13 @@ mod tests {
 			format!(
 				indoc! {"
 					.
-					├── foo
-					│   └── bar <- bar {unknown}
-					├── baz
-					│   └── qux <- test/qux {done}
-					├── quux
-					│   └── quuz <- quuz {ready}
-					└── corge
+					├── foo                     
+					│   └── bar <- bar          {unknown}
+					├── baz                     
+					│   └── qux <- test/qux     {done}
+					├── quux                    
+					│   └── quuz <- quuz        {ready}
+					└── corge                   
 					    └── gralt <- test/gralt {conflict}
 				"},
 				unknown = Colour::Yellow.paint("(Unknown)"),
