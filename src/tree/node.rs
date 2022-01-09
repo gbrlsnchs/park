@@ -165,9 +165,9 @@ impl Node {
 		}
 	}
 
-	pub fn get_children(&self) -> Option<Vec<NodeRef>> {
+	pub fn get_children(&self) -> Option<&Vec<NodeRef>> {
 		match self {
-			Node::Root(children) | Node::Branch { children, .. } => Some(children.to_vec()),
+			Node::Root(children) | Node::Branch { children, .. } => Some(children),
 			_ => None,
 		}
 	}

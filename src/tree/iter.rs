@@ -38,12 +38,14 @@ impl<'a> Iterator for DepthFirstIter {
 		let node = current.node_ref.borrow();
 		let children = node.get_children();
 
-		for (idx, child) in children.iter().flatten().rev().enumerate() {
-			self.stack.push(NodeEntry {
-				deepest: idx == 0,
-				level: current.level + 1,
-				node_ref: Rc::clone(child),
-			});
+		if let Some(children) = children {
+			for (idx, child) in children.iter().rev().enumerate() {
+				self.stack.push(NodeEntry {
+					deepest: idx == 0,
+					level: current.level + 1,
+					node_ref: Rc::clone(child),
+				});
+			}
 		}
 
 		Some(NodeEntry {
