@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 ansi_term = "0.12.1"
+clap = { version = "3.0.5", features = ["derive"] }
 serde = { version = "1.0.133", features = ["derive"] }
 tabwriter = { version = "1.2.1", features = ["ansi_formatting"] }
 thiserror = "1.0.26"
