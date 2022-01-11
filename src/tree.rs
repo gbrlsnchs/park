@@ -165,7 +165,14 @@ impl<'a> Display for Tree {
 
 			if let Node::Root(..) = *node {
 				let cwd = Colour::Cyan.paint(self.work_dir.to_string_lossy());
-				if writeln!(tab_writer, ".\t== {}", cwd).is_err() {
+				if writeln!(
+					tab_writer,
+					".\t{} {}",
+					Colour::White.dimmed().paint(":="),
+					cwd,
+				)
+				.is_err()
+				{
 					return Err(FmtError);
 				}
 
@@ -188,7 +195,7 @@ impl<'a> Display for Tree {
 					(false, _) => "│   ",
 				};
 
-				if write!(tab_writer, "{}", segment).is_err() {
+				if write!(tab_writer, "{}", Colour::White.dimmed().paint(segment)).is_err() {
 					return Err(FmtError);
 				}
 			}
@@ -204,21 +211,22 @@ impl<'a> Display for Tree {
 					link_path,
 					status,
 				} => {
-					let status_str = format!("({:?})", status).to_uppercase();
-					let status = match status {
-						Status::Unknown => Colour::White.dimmed().paint(status_str),
-						Status::Done => Colour::Blue.paint(status_str),
-						Status::Ready => Colour::Green.paint(status_str),
-						Status::Mismatch => Colour::Yellow.paint(status_str),
-						Status::Conflict => Colour::Red.paint(status_str),
+					let status_style = match status {
+						Status::Unknown => Colour::White.dimmed(),
+						Status::Done => Colour::Blue.normal(),
+						Status::Ready => Colour::Green.normal(),
+						Status::Mismatch => Colour::Yellow.normal(),
+						Status::Conflict => Colour::Red.normal(),
 					};
+					let status = format!("({:?})", status).to_uppercase();
 
 					if writeln!(
 						tab_writer,
-						"{target_path}\t<- {link_path}\t{status}",
+						"{target_path}\t{arrow} {link_path}\t{status}",
 						target_path = target_path.file_name().unwrap().to_string_lossy(),
+						arrow = Colour::White.dimmed().paint("<-"),
 						link_path = Colour::Purple.paint(link_path.to_string_lossy()),
-						status = status,
+						status = status_style.bold().paint(status),
 					)
 					.is_err()
 					{
@@ -612,42 +620,61 @@ mod tests {
 				}),
 				Node::new_ref(Node::Branch {
 					path: PathBuf::from("corge"),
-					children: vec![Node::new_ref(Node::Leaf {
-						link_path: PathBuf::from("test").join("gralt"),
-						target_path: PathBuf::from("corge/gralt"),
-						status: Status::Conflict,
-					})],
+					children: vec![
+						Node::new_ref(Node::Leaf {
+							link_path: PathBuf::from("tests/data/something"),
+							target_path: PathBuf::from("something"),
+							status: Status::Mismatch,
+						}),
+						Node::new_ref(Node::Leaf {
+							link_path: PathBuf::from("test").join("gralt"),
+							target_path: PathBuf::from("corge/gralt"),
+							status: Status::Conflict,
+						}),
+					],
 				}),
 			])),
 			work_dir: PathBuf::from("test"),
 		};
 
-		println!("{}", tree);
+		println!("\n{}", tree);
+
+		let link_color = Colour::Purple.normal();
+		let symbols_color = Colour::White.dimmed();
 
 		// TODO(gbrlsnchs): This can (and should) get better in the future. =)
 		assert_eq!(
 			tree.to_string(),
 			format!(
 				indoc! {"
-					.             == {current_dir}
-					├── foo                            
-					│   └── bar   <- {bar}        {unknown}
-					├── baz                            
-					│   └── qux   <- {test_qux}   {done}
-					├── quux                           
-					│   └── quuz  <- {quuz}       {ready}
-					└── corge                          
-					    └── gralt <- {test_gralt} {conflict}
+					.                 {equals} {current_dir}
+					{t_bar}foo                                   
+					{straight_bar}{l_bar}bar       {arrow} {bar}                  {unknown}
+					{t_bar}baz                                   
+					{straight_bar}{l_bar}qux       {arrow} {test_qux}             {done}
+					{t_bar}quux                                  
+					{straight_bar}{l_bar}quuz      {arrow} {quuz}                 {ready}
+					{l_bar}corge                                 
+					{blank}{t_bar}something {arrow} {tests_data_something} {mismatch}
+					{blank}{l_bar}gralt     {arrow} {test_gralt}           {conflict}
 				"},
+				t_bar = symbols_color.paint("├── "),
+				l_bar = symbols_color.paint("└── "),
+				straight_bar = symbols_color.paint("│   "),
+				blank = symbols_color.paint("    "),
+				equals = symbols_color.paint(":="),
+				arrow = symbols_color.paint("<-"),
 				current_dir = Colour::Cyan.paint("test"),
-				bar = Colour::Purple.paint("bar"),
-				test_qux = Colour::Purple.paint("test/qux"),
-				quuz = Colour::Purple.paint("quuz"),
-				test_gralt = Colour::Purple.paint("test/gralt"),
-				unknown = Colour::White.dimmed().paint("(UNKNOWN)"),
-				done = Colour::Blue.paint("(DONE)"),
-				ready = Colour::Green.paint("(READY)"),
-				conflict = Colour::Red.paint("(CONFLICT)"),
+				bar = link_color.paint("bar"),
+				test_qux = link_color.paint("test/qux"),
+				quuz = link_color.paint("quuz"),
+				tests_data_something = link_color.paint("tests/data/something"),
+				test_gralt = link_color.paint("test/gralt"),
+				unknown = Colour::White.dimmed().bold().paint("(UNKNOWN)"),
+				done = Colour::Blue.bold().paint("(DONE)"),
+				ready = Colour::Green.bold().paint("(READY)"),
+				mismatch = Colour::Yellow.bold().paint("(MISMATCH)"),
+				conflict = Colour::Red.bold().paint("(CONFLICT)"),
 			)
 		);
 
