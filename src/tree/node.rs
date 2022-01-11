@@ -34,6 +34,8 @@ pub enum Status {
 	Ready,
 	/// The target is already symlinked accordingly.
 	Done,
+	/// Link exists, but points to a different target.
+	Mismatch,
 	/// Another file already exists in the link path.
 	Conflict,
 }

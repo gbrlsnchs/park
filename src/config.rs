@@ -12,6 +12,7 @@ pub type TargetMap = BTreeMap<PathBuf, Target>;
 pub struct Config {
 	pub tags: Option<TagSet>,
 	pub base_dir: PathBuf,
+	pub work_dir: Option<PathBuf>,
 	pub targets: Option<TargetMap>,
 }
 
@@ -51,13 +52,12 @@ mod tests {
 	use indoc::indoc;
 	use maplit::{btreemap, hashset};
 	use pretty_assertions::assert_eq;
-	use toml::from_str;
 
 	use super::*;
 
 	#[test]
 	fn deserialize_config_without_targets() {
-		let got: Config = from_str(indoc! {r#"
+		let got: Config = toml::from_str(indoc! {r#"
 			tags = ["foo", "bar"]
 			base_dir = "test"
 		"#})
@@ -68,6 +68,7 @@ mod tests {
 			Config {
 				tags: Some(hashset! {String::from("foo"), String::from("bar")}),
 				base_dir: PathBuf::from("test"),
+				work_dir: None,
 				targets: None,
 			}
 		);
@@ -75,9 +76,10 @@ mod tests {
 
 	#[test]
 	fn deserialize_config_with_empty_targets() {
-		let got: Config = from_str(indoc! {r#"
+		let got: Config = toml::from_str(indoc! {r#"
 			tags = ["foo", "bar"]
 			base_dir = "test"
+			work_dir = "somewhere"
 			targets = {}
 		"#})
 		.unwrap();
@@ -87,6 +89,7 @@ mod tests {
 			Config {
 				tags: Some(hashset! {String::from("foo"), String::from("bar")}),
 				base_dir: PathBuf::from("test"),
+				work_dir: Some(PathBuf::from("somewhere")),
 				targets: Some(btreemap! {}),
 			}
 		);
@@ -94,7 +97,7 @@ mod tests {
 
 	#[test]
 	fn deserialize_config_with_default_targets() {
-		let got: Config = from_str(indoc! {r#"
+		let got: Config = toml::from_str(indoc! {r#"
 			tags = ["foo", "bar"]
 			base_dir = "test"
 
@@ -109,6 +112,7 @@ mod tests {
 			Config {
 				tags: Some(hashset! {String::from("foo"), String::from("bar")}),
 				base_dir: PathBuf::from("test"),
+				work_dir: None,
 				targets: Some(btreemap! {
 					PathBuf::from("baz") => Target{
 						link: None,
@@ -125,7 +129,7 @@ mod tests {
 
 	#[test]
 	fn deserialize_config_with_custom_targets() {
-		let got: Config = from_str(indoc! {r#"
+		let got: Config = toml::from_str(indoc! {r#"
 			tags = ["foo", "bar"]
 			base_dir = "test"
 
@@ -144,6 +148,7 @@ mod tests {
 			Config {
 				tags: Some(hashset! {String::from("foo"), String::from("bar")}),
 				base_dir: PathBuf::from("test"),
+				work_dir: None,
 				targets: Some(btreemap! {
 					PathBuf::from("baz") => Target{
 						link: Some(Link{

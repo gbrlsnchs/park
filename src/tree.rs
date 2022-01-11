@@ -1,9 +1,11 @@
 use std::{
 	cell::RefCell,
+	env,
 	fmt::{Display, Error as FmtError, Formatter, Result as FmtResult},
 	io::{Error as IoError, Write},
+	path::PathBuf,
 	rc::Rc,
-	str::from_utf8,
+	str,
 };
 
 use ansi_term::Colour;
@@ -25,8 +27,9 @@ mod node;
 
 /// Structure representing all dotfiles after reading a configuration for Park.
 #[derive(Debug, PartialEq)]
-struct Tree {
-	pub(super) root: NodeRef,
+pub struct Tree {
+	root: NodeRef,
+	work_dir: PathBuf,
 }
 
 impl<'a> Tree {
@@ -34,8 +37,12 @@ impl<'a> Tree {
 	pub fn parse(config: Config, mut runtime_tags: TagSet) -> Result<Self, AddError> {
 		let targets = config.targets.unwrap_or_default();
 
+		let cwd = env::current_dir().unwrap_or_default();
+		let work_dir = config.work_dir.unwrap_or(cwd);
+
 		let tree = Tree {
 			root: Rc::new(RefCell::new(Node::Root(Vec::with_capacity(targets.len())))),
+			work_dir,
 		};
 
 		let Config {
@@ -116,13 +123,13 @@ impl<'a> Tree {
 
 					let existing_target_path = existing_target_path.unwrap();
 
-					if existing_target_path == *target_path {
-						*status = Status::Done;
+					let target_path = self.work_dir.join(target_path);
 
-						continue;
+					*status = if existing_target_path == target_path {
+						Status::Done
+					} else {
+						Status::Mismatch
 					}
-
-					*status = Status::Conflict;
 				}
 				_ => {}
 			}
@@ -157,7 +164,10 @@ impl<'a> Display for Tree {
 			let node = node_ref.borrow();
 
 			if let Node::Root(..) = *node {
-				writeln!(f, ".")?;
+				let cwd = Colour::Cyan.paint(self.work_dir.to_string_lossy());
+				if writeln!(tab_writer, ".\t== {}", cwd).is_err() {
+					return Err(FmtError);
+				}
 
 				continue;
 			}
@@ -185,7 +195,7 @@ impl<'a> Display for Tree {
 
 			match &*node {
 				Node::Branch { path, .. } => {
-					if writeln!(tab_writer, "{}\t", path.to_string_lossy()).is_err() {
+					if writeln!(tab_writer, "{}\t\t", path.to_string_lossy()).is_err() {
 						return Err(FmtError);
 					};
 				}
@@ -196,17 +206,18 @@ impl<'a> Display for Tree {
 				} => {
 					let status_str = format!("({:?})", status).to_uppercase();
 					let status = match status {
-						Status::Unknown => Colour::Yellow.paint(status_str),
+						Status::Unknown => Colour::White.dimmed().paint(status_str),
 						Status::Done => Colour::Blue.paint(status_str),
 						Status::Ready => Colour::Green.paint(status_str),
+						Status::Mismatch => Colour::Yellow.paint(status_str),
 						Status::Conflict => Colour::Red.paint(status_str),
 					};
 
 					if writeln!(
 						tab_writer,
-						"{target_path} <- {link_path}\t{status}",
+						"{target_path}\t<- {link_path}\t{status}",
 						target_path = target_path.file_name().unwrap().to_string_lossy(),
-						link_path = link_path.to_string_lossy(),
+						link_path = Colour::Purple.paint(link_path.to_string_lossy()),
 						status = status,
 					)
 					.is_err()
@@ -221,7 +232,7 @@ impl<'a> Display for Tree {
 		match tab_writer.into_inner() {
 			Err(_) => return Err(FmtError),
 			Ok(w) => {
-				write!(f, "{}", from_utf8(&w).unwrap())?;
+				write!(f, "{}", str::from_utf8(&w).unwrap())?;
 			}
 		}
 
@@ -245,12 +256,14 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn parse() {
+	fn parse() -> Result<(), IoError> {
 		struct Test<'a> {
 			description: &'a str,
 			input: (Config, TagSet),
 			output: Result<Tree, AddError>,
 		}
+
+		let current_dir = env::current_dir()?;
 
 		let test_cases = vec![
 			Test {
@@ -270,6 +283,7 @@ mod tests {
 						target_path: PathBuf::from("foo"),
 						status: Status::Unknown,
 					})])),
+					work_dir: PathBuf::from(&current_dir),
 				}),
 			},
 			Test {
@@ -292,6 +306,7 @@ mod tests {
 							status: Status::Unknown,
 						})],
 					})])),
+					work_dir: PathBuf::from(&current_dir),
 				}),
 			},
 			Test {
@@ -317,6 +332,7 @@ mod tests {
 						target_path: PathBuf::from("foo"),
 						status: Status::Unknown,
 					})])),
+					work_dir: PathBuf::from(&current_dir),
 				}),
 			},
 			Test {
@@ -341,6 +357,7 @@ mod tests {
 				),
 				output: Ok(Tree {
 					root: Node::new_ref(Node::Root(vec![])),
+					work_dir: PathBuf::from(&current_dir),
 				}),
 			},
 			Test {
@@ -368,6 +385,7 @@ mod tests {
 						target_path: PathBuf::from("foo"),
 						status: Status::Unknown,
 					})])),
+					work_dir: PathBuf::from(&current_dir),
 				}),
 			},
 			Test {
@@ -396,6 +414,7 @@ mod tests {
 						target_path: PathBuf::from("foo"),
 						status: Status::Unknown,
 					})])),
+					work_dir: PathBuf::from(&current_dir),
 				}),
 			},
 			Test {
@@ -419,6 +438,7 @@ mod tests {
 				),
 				output: Ok(Tree {
 					root: Node::new_ref(Node::Root(vec![])),
+					work_dir: PathBuf::from(&current_dir),
 				}),
 			},
 			Test {
@@ -446,6 +466,7 @@ mod tests {
 						target_path: PathBuf::from("foo"),
 						status: Status::Unknown,
 					})])),
+					work_dir: PathBuf::from(&current_dir),
 				}),
 			},
 		];
@@ -455,6 +476,8 @@ mod tests {
 
 			assert_eq!(got, case.output, "bad result for {:?}", case.description);
 		}
+
+		Ok(())
 	}
 
 	#[test]
@@ -465,6 +488,8 @@ mod tests {
 			output: Tree,
 		}
 
+		let current_dir = env::current_dir()?;
+
 		let test_cases = vec![
 			Test {
 				description: "single target should be ready",
@@ -474,6 +499,7 @@ mod tests {
 						target_path: PathBuf::from("foo"),
 						status: Status::Unknown,
 					})])),
+					work_dir: PathBuf::from(&current_dir),
 				},
 				output: Tree {
 					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
@@ -481,6 +507,7 @@ mod tests {
 						target_path: PathBuf::from("foo"),
 						status: Status::Ready,
 					})])),
+					work_dir: PathBuf::from(&current_dir),
 				},
 			},
 			Test {
@@ -491,6 +518,7 @@ mod tests {
 						target_path: PathBuf::from("Cargo.toml"),
 						status: Status::Unknown,
 					})])),
+					work_dir: PathBuf::from(&current_dir),
 				},
 				output: Tree {
 					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
@@ -498,16 +526,37 @@ mod tests {
 						target_path: PathBuf::from("Cargo.toml"),
 						status: Status::Conflict,
 					})])),
+					work_dir: PathBuf::from(&current_dir),
 				},
 			},
 			Test {
-				description: "single target with existing link",
+				description: "single target with wrong existing link",
 				input: Tree {
 					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
 						link_path: PathBuf::from("tests/data/something"),
 						target_path: PathBuf::from("something"),
 						status: Status::Unknown,
 					})])),
+					work_dir: PathBuf::from(&current_dir),
+				},
+				output: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						link_path: PathBuf::from("tests/data/something"),
+						target_path: PathBuf::from("something"),
+						status: Status::Mismatch,
+					})])),
+					work_dir: PathBuf::from(&current_dir),
+				},
+			},
+			Test {
+				description: "single target with correct existing link",
+				input: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						link_path: PathBuf::from("tests/data/something"),
+						target_path: PathBuf::from("something"),
+						status: Status::Unknown,
+					})])),
+					work_dir: PathBuf::from("test"),
 				},
 				output: Tree {
 					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
@@ -515,6 +564,7 @@ mod tests {
 						target_path: PathBuf::from("something"),
 						status: Status::Done,
 					})])),
+					work_dir: PathBuf::from("test"),
 				},
 			},
 		];
@@ -533,7 +583,7 @@ mod tests {
 	}
 
 	#[test]
-	fn format_tree() {
+	fn format_tree() -> Result<(), IoError> {
 		let tree = Tree {
 			root: Node::new_ref(Node::Root(vec![
 				Node::new_ref(Node::Branch {
@@ -569,6 +619,7 @@ mod tests {
 					})],
 				}),
 			])),
+			work_dir: PathBuf::from("test"),
 		};
 
 		println!("{}", tree);
@@ -578,21 +629,28 @@ mod tests {
 			tree.to_string(),
 			format!(
 				indoc! {"
-					.
-					├── foo                     
-					│   └── bar <- bar          {unknown}
-					├── baz                     
-					│   └── qux <- test/qux     {done}
-					├── quux                    
-					│   └── quuz <- quuz        {ready}
-					└── corge                   
-					    └── gralt <- test/gralt {conflict}
+					.             == {current_dir}
+					├── foo                            
+					│   └── bar   <- {bar}        {unknown}
+					├── baz                            
+					│   └── qux   <- {test_qux}   {done}
+					├── quux                           
+					│   └── quuz  <- {quuz}       {ready}
+					└── corge                          
+					    └── gralt <- {test_gralt} {conflict}
 				"},
-				unknown = Colour::Yellow.paint("(UNKNOWN)"),
+				current_dir = Colour::Cyan.paint("test"),
+				bar = Colour::Purple.paint("bar"),
+				test_qux = Colour::Purple.paint("test/qux"),
+				quuz = Colour::Purple.paint("quuz"),
+				test_gralt = Colour::Purple.paint("test/gralt"),
+				unknown = Colour::White.dimmed().paint("(UNKNOWN)"),
 				done = Colour::Blue.paint("(DONE)"),
 				ready = Colour::Green.paint("(READY)"),
 				conflict = Colour::Red.paint("(CONFLICT)"),
 			)
 		);
+
+		Ok(())
 	}
 }
