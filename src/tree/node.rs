@@ -38,6 +38,8 @@ pub enum Status {
 	Mismatch,
 	/// Another file already exists in the link path.
 	Conflict,
+	/// The file supposed to serve as the link directory is not a directory.
+	Obstructed,
 }
 
 pub type NodeRef = Rc<RefCell<Node>>;

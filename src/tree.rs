@@ -98,40 +98,41 @@ impl<'a> Tree {
 		for NodeEntry { node_ref, .. } in self {
 			let mut node = node_ref.borrow_mut();
 
-			match &mut *node {
-				Node::Branch { path, .. } => {
-					if path.exists() && path.is_file() {
-						todo!();
-					}
-				}
-				Node::Leaf {
-					target_path,
-					link_path,
-					status,
-				} => {
-					let existing_target_path = link_path.read_link();
-
-					if existing_target_path.is_err() {
-						*status = if link_path.exists() {
-							Status::Conflict
-						} else {
-							Status::Ready
-						};
+			if let Node::Leaf {
+				target_path,
+				link_path,
+				status,
+			} = &mut *node
+			{
+				if let Some(parent_dir) = link_path.parent() {
+					if parent_dir.exists() && !parent_dir.is_dir() {
+						*status = Status::Obstructed;
 
 						continue;
 					}
-
-					let existing_target_path = existing_target_path.unwrap();
-
-					let target_path = self.work_dir.join(target_path);
-
-					*status = if existing_target_path == target_path {
-						Status::Done
-					} else {
-						Status::Mismatch
-					}
 				}
-				_ => {}
+
+				let existing_target_path = link_path.read_link();
+
+				if existing_target_path.is_err() {
+					*status = if link_path.exists() {
+						Status::Conflict
+					} else {
+						Status::Ready
+					};
+
+					continue;
+				}
+
+				let existing_target_path = existing_target_path.unwrap();
+
+				let target_path = self.work_dir.join(target_path);
+
+				*status = if existing_target_path == target_path {
+					Status::Done
+				} else {
+					Status::Mismatch
+				}
 			}
 		}
 
@@ -216,7 +217,7 @@ impl<'a> Display for Tree {
 						Status::Done => Colour::Blue.normal(),
 						Status::Ready => Colour::Green.normal(),
 						Status::Mismatch => Colour::Yellow.normal(),
-						Status::Conflict => Colour::Red.normal(),
+						Status::Conflict | Status::Obstructed => Colour::Red.normal(),
 					};
 					let status = format!("({:?})", status).to_uppercase();
 
@@ -575,6 +576,25 @@ mod tests {
 					work_dir: PathBuf::from("test"),
 				},
 			},
+			Test {
+				description: "link with invalid parent directory",
+				input: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						link_path: PathBuf::from("LICENSE/something"),
+						target_path: PathBuf::from("something"),
+						status: Status::Unknown,
+					})])),
+					work_dir: PathBuf::from("test"),
+				},
+				output: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						link_path: PathBuf::from("LICENSE/something"),
+						target_path: PathBuf::from("something"),
+						status: Status::Obstructed,
+					})])),
+					work_dir: PathBuf::from("test"),
+				},
+			},
 		];
 
 		for case in test_cases {
@@ -605,7 +625,7 @@ mod tests {
 				Node::new_ref(Node::Branch {
 					path: PathBuf::from("baz"),
 					children: vec![Node::new_ref(Node::Leaf {
-						link_path: PathBuf::from("test").join("qux"),
+						link_path: PathBuf::from("test/qux"),
 						target_path: PathBuf::from("baz/qux"),
 						status: Status::Done,
 					})],
@@ -627,9 +647,14 @@ mod tests {
 							status: Status::Mismatch,
 						}),
 						Node::new_ref(Node::Leaf {
-							link_path: PathBuf::from("test").join("gralt"),
+							link_path: PathBuf::from("test/gralt"),
 							target_path: PathBuf::from("corge/gralt"),
 							status: Status::Conflict,
+						}),
+						Node::new_ref(Node::Leaf {
+							link_path: PathBuf::from("file/anything"),
+							target_path: PathBuf::from("anything"),
+							status: Status::Obstructed,
 						}),
 					],
 				}),
@@ -656,7 +681,8 @@ mod tests {
 					{straight_bar}{l_bar}quuz      {arrow} {quuz}                 {ready}
 					{l_bar}corge                                 
 					{blank}{t_bar}something {arrow} {tests_data_something} {mismatch}
-					{blank}{l_bar}gralt     {arrow} {test_gralt}           {conflict}
+					{blank}{t_bar}gralt     {arrow} {test_gralt}           {conflict}
+					{blank}{l_bar}anything  {arrow} {file_anything}        {obstructed}
 				"},
 				t_bar = symbols_color.paint("├── "),
 				l_bar = symbols_color.paint("└── "),
@@ -670,11 +696,13 @@ mod tests {
 				quuz = link_color.paint("quuz"),
 				tests_data_something = link_color.paint("tests/data/something"),
 				test_gralt = link_color.paint("test/gralt"),
+				file_anything = link_color.paint("file/anything"),
 				unknown = Colour::White.dimmed().bold().paint("(UNKNOWN)"),
 				done = Colour::Blue.bold().paint("(DONE)"),
 				ready = Colour::Green.bold().paint("(READY)"),
 				mismatch = Colour::Yellow.bold().paint("(MISMATCH)"),
 				conflict = Colour::Red.bold().paint("(CONFLICT)"),
+				obstructed = Colour::Red.bold().paint("(OBSTRUCTED)"),
 			)
 		);
 
