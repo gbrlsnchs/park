@@ -3,6 +3,7 @@ use std::{
 	env,
 	fmt::{Display, Error as FmtError, Formatter, Result as FmtResult},
 	io::{Error as IoError, Write},
+	os::unix::fs,
 	path::PathBuf,
 	rc::Rc,
 	str,
@@ -16,12 +17,13 @@ use crate::{
 	tree::node::Status,
 };
 
-use self::{iter::DepthFirstIter, node::NodeRef};
+use self::{error::Error, iter::DepthFirstIter, node::NodeRef};
 use self::{
 	iter::NodeEntry,
 	node::{AddError, Node},
 };
 
+mod error;
 mod iter;
 mod node;
 
@@ -138,6 +140,54 @@ impl<'a> Tree {
 
 		Ok(())
 	}
+
+	pub fn link(&self) -> Result<Vec<PathBuf>, Error> {
+		let links: Result<Vec<(PathBuf, PathBuf)>, Error> = self
+			.into_iter()
+			.filter(|NodeEntry { node_ref, .. }| {
+				let node = node_ref.borrow();
+
+				// Only leaves not already done should be linked.
+				match &*node {
+					Node::Leaf { status, .. } => *status != Status::Done,
+					_ => false,
+				}
+			})
+			.map(|NodeEntry { node_ref, .. }| {
+				let node = node_ref.borrow();
+
+				if let Node::Leaf {
+					status,
+					target_path,
+					link_path,
+				} = &*node
+				{
+					match status {
+						// TODO: Return more detailed errors.
+						Status::Mismatch | Status::Conflict | Status::Obstructed => {
+							return Err(Error::InternalError(link_path.clone()))
+						}
+						_ => {}
+					}
+
+					return Ok((target_path.clone(), link_path.clone()));
+				}
+
+				unreachable!();
+			})
+			.collect();
+
+		let mut created_links = Vec::new();
+		for (target_path, link_path) in links? {
+			if let Err(err) = fs::symlink(&target_path, &link_path) {
+				return Err(Error::IoError(err.kind()));
+			};
+
+			created_links.push(link_path);
+		}
+
+		Ok(created_links)
+	}
 }
 
 impl<'a> IntoIterator for &'a Tree {
@@ -251,7 +301,7 @@ impl<'a> Display for Tree {
 
 #[cfg(test)]
 mod tests {
-	use std::path::PathBuf;
+	use std::{fs, path::PathBuf};
 
 	use indoc::indoc;
 	use maplit::{btreemap, hashset};
@@ -605,6 +655,122 @@ mod tests {
 				"bad result for {:?}",
 				case.description
 			);
+		}
+
+		Ok(())
+	}
+
+	#[test]
+	fn link() -> Result<(), IoError> {
+		struct Test<'a> {
+			description: &'a str,
+			input: Tree,
+			output: Result<Vec<PathBuf>, Error>,
+		}
+
+		let test_cases = vec![
+			Test {
+				input: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						target_path: PathBuf::from("fake_path/foo"),
+						link_path: PathBuf::from("tests/data/foo"),
+						status: Status::Done,
+					})])),
+					work_dir: PathBuf::from("fake_path"),
+				},
+				description: "nothing to be done",
+				output: Ok(vec![]),
+			},
+			Test {
+				input: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						target_path: PathBuf::from("fake_path/foo"),
+						link_path: PathBuf::from("tests/data/foo"),
+						status: Status::Ready,
+					})])),
+					work_dir: PathBuf::from("fake_path"),
+				},
+				description: "simple link",
+				output: Ok(vec![PathBuf::from("tests/data/foo")]),
+			},
+			Test {
+				input: Tree {
+					root: Node::new_ref(Node::Root(vec![
+						Node::new_ref(Node::Leaf {
+							target_path: PathBuf::from("fake_path/foo"),
+							link_path: PathBuf::from("tests/data/foo"),
+							status: Status::Ready,
+						}),
+						Node::new_ref(Node::Leaf {
+							target_path: PathBuf::from("fake_path/bar"),
+							link_path: PathBuf::from("tests/data/bar"),
+							status: Status::Ready,
+						}),
+					])),
+					work_dir: PathBuf::from("fake_path"),
+				},
+				description: "multiple links",
+				output: Ok(vec![
+					PathBuf::from("tests/data/foo"),
+					PathBuf::from("tests/data/bar"),
+				]),
+			},
+			Test {
+				input: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						target_path: PathBuf::from("fake_path/something"),
+						link_path: PathBuf::from("tests/data/something"),
+						status: Status::Conflict,
+					})])),
+					work_dir: PathBuf::from("fake_path"),
+				},
+				description: "bad link with conflict",
+				output: Err(Error::InternalError(PathBuf::from("tests/data/something"))),
+			},
+			Test {
+				input: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						target_path: PathBuf::from("fake_path/something"),
+						link_path: PathBuf::from("tests/data/something"),
+						status: Status::Obstructed,
+					})])),
+					work_dir: PathBuf::from("fake_path"),
+				},
+				description: "bad link with obstruction",
+				output: Err(Error::InternalError(PathBuf::from("tests/data/something"))),
+			},
+			Test {
+				input: Tree {
+					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
+						target_path: PathBuf::from("fake_path/something"),
+						link_path: PathBuf::from("tests/data/something"),
+						status: Status::Mismatch,
+					})])),
+					work_dir: PathBuf::from("fake_path"),
+				},
+				description: "bad link with mismatch",
+				output: Err(Error::InternalError(PathBuf::from("tests/data/something"))),
+			},
+		];
+
+		for case in test_cases {
+			let got = case.input.link();
+
+			if let Ok(links) = &got {
+				for link in links {
+					let new_target_path = link.read_link()?;
+					assert_eq!(
+						new_target_path,
+						PathBuf::from("fake_path").join(link.file_name().unwrap()),
+						"wrong target path for {:?}",
+						case.description,
+					);
+
+					fs::remove_file(link)?;
+				}
+			}
+
+			assert_eq!(got, case.output, "bad result for {:?}", case.description);
 		}
 
 		Ok(())
