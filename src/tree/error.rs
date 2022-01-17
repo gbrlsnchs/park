@@ -1,4 +1,5 @@
 use std::{
+	error::Error as StdError,
 	fmt::{Display, Formatter},
 	io::{Error as IoError, ErrorKind as IoErrorKind},
 	path::PathBuf,
@@ -20,3 +21,5 @@ impl Display for Error {
 		}
 	}
 }
+
+impl StdError for Error {}
