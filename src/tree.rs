@@ -179,7 +179,7 @@ impl<'a> Tree {
 
 		let mut created_links = Vec::new();
 		for (target_path, link_path) in links? {
-			if let Err(err) = fs::symlink(&target_path, &link_path) {
+			if let Err(err) = fs::symlink(target_path, &link_path) {
 				return Err(Error::IoError(err.kind()));
 			};
 
