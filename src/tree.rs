@@ -170,7 +170,7 @@ impl<'a> Tree {
 						_ => {}
 					}
 
-					return Ok((target_path.clone(), link_path.clone()));
+					return Ok((self.work_dir.join(target_path), link_path.clone()));
 				}
 
 				unreachable!();
@@ -672,7 +672,7 @@ mod tests {
 			Test {
 				input: Tree {
 					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
-						target_path: PathBuf::from("fake_path/foo"),
+						target_path: PathBuf::from("foo"),
 						link_path: PathBuf::from("tests/data/foo"),
 						status: Status::Done,
 					})])),
@@ -684,7 +684,7 @@ mod tests {
 			Test {
 				input: Tree {
 					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
-						target_path: PathBuf::from("fake_path/foo"),
+						target_path: PathBuf::from("foo"),
 						link_path: PathBuf::from("tests/data/foo"),
 						status: Status::Ready,
 					})])),
@@ -697,12 +697,12 @@ mod tests {
 				input: Tree {
 					root: Node::new_ref(Node::Root(vec![
 						Node::new_ref(Node::Leaf {
-							target_path: PathBuf::from("fake_path/foo"),
+							target_path: PathBuf::from("foo"),
 							link_path: PathBuf::from("tests/data/foo"),
 							status: Status::Ready,
 						}),
 						Node::new_ref(Node::Leaf {
-							target_path: PathBuf::from("fake_path/bar"),
+							target_path: PathBuf::from("bar"),
 							link_path: PathBuf::from("tests/data/bar"),
 							status: Status::Ready,
 						}),
@@ -718,7 +718,7 @@ mod tests {
 			Test {
 				input: Tree {
 					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
-						target_path: PathBuf::from("fake_path/something"),
+						target_path: PathBuf::from("something"),
 						link_path: PathBuf::from("tests/data/something"),
 						status: Status::Conflict,
 					})])),
@@ -730,7 +730,7 @@ mod tests {
 			Test {
 				input: Tree {
 					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
-						target_path: PathBuf::from("fake_path/something"),
+						target_path: PathBuf::from("something"),
 						link_path: PathBuf::from("tests/data/something"),
 						status: Status::Obstructed,
 					})])),
@@ -742,7 +742,7 @@ mod tests {
 			Test {
 				input: Tree {
 					root: Node::new_ref(Node::Root(vec![Node::new_ref(Node::Leaf {
-						target_path: PathBuf::from("fake_path/something"),
+						target_path: PathBuf::from("something"),
 						link_path: PathBuf::from("tests/data/something"),
 						status: Status::Mismatch,
 					})])),
@@ -757,16 +757,23 @@ mod tests {
 			let got = case.input.link();
 
 			if let Ok(links) = &got {
+				let mut assertions = Vec::new();
+
 				for link in links {
-					let new_target_path = link.read_link()?;
-					assert_eq!(
-						new_target_path,
+					assertions.push((
+						link.read_link()?,
 						PathBuf::from("fake_path").join(link.file_name().unwrap()),
+					));
+
+					fs::remove_file(link)?;
+				}
+
+				for (new_target_path, link_path) in assertions {
+					assert_eq!(
+						new_target_path, link_path,
 						"wrong target path for {:?}",
 						case.description,
 					);
-
-					fs::remove_file(link)?;
 				}
 			}
 
