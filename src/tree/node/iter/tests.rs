@@ -7,11 +7,11 @@ use super::*;
 fn iterate_in_correct_order() {
 	let root = Node::Branch(indexmap! {
 		"baz".into() => Node::Branch(indexmap!{
-			"qux".into() => Node::Leaf("test/quxlinkku".into()),
+			"qux".into() => Node::Leaf("test/qux".into()),
 		}),
 		"test".into() => Node::Leaf("something/else".into()),
 		"foo".into() => Node::Branch(indexmap!{
-			"bar".into() => Node::Leaf("test/barlinkku".into()),
+			"bar".into() => Node::Leaf("test/bar".into()),
 		}),
 	});
 	let mut iter = Iter {
@@ -56,7 +56,7 @@ fn iterate_in_correct_order() {
 				last_sibling: true
 			},
 			target_path: "baz/qux".into(),
-			link_path: Some("test/quxlinkku".into()),
+			link_path: Some("test/qux".into()),
 		}),
 	);
 	assert_eq!(
@@ -89,7 +89,7 @@ fn iterate_in_correct_order() {
 				last_sibling: true
 			},
 			target_path: "foo/bar".into(),
-			link_path: Some("test/barlinkku".into()),
+			link_path: Some("test/bar".into()),
 		}),
 	);
 	assert_eq!(iter.next(), None);
