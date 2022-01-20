@@ -1,6 +1,8 @@
 use std::io::{self, Read};
 
-use cli::Result as CliResult;
+use clap::Parser;
+
+use cli::{Args, Result as CliResult};
 
 mod cli;
 mod config;
@@ -16,7 +18,9 @@ fn main() -> CliResult {
 	let stdout = io::stdout();
 	let handle = stdout.lock();
 
-	cli::run(&input, handle)?;
+	let args = Args::parse();
+
+	cli::run(&input, handle, args)?;
 
 	Ok(())
 }
