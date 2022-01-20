@@ -1,252 +1,146 @@
+use std::ffi::OsString;
+
+use indexmap::indexmap;
 use pretty_assertions::assert_eq;
 
 use super::*;
 
 #[test]
-fn test_add() {
-	let default_base_dir = PathBuf::from("default_base_dir");
-
+fn test_add_nodes() {
 	struct Test<'a> {
 		description: &'a str,
-		node_before: Node,
-		input: (PathBuf, Link),
-		node_after: Node,
-		want: AddResult,
+		input: (Node, Vec<&'a OsStr>, PathBuf),
+		output: (Node, Result<(), Error>),
 	}
+
+	let foo = OsString::from("foo");
+	let bar = OsString::from("bar");
+	let baz = OsString::from("baz");
 
 	let test_cases = vec![
 		Test {
 			description: "simple first node",
-			node_before: Node::Root(Vec::new()),
-			input: (PathBuf::from("foo"), Link::default()),
-			node_after: Node::Root(vec![Node::new_ref(Node::Leaf {
-				link_path: default_base_dir.join("foo"),
-				target_path: PathBuf::from("foo"),
-				status: Status::Unknown,
-			})]),
-			want: Ok(()),
+			input: (Node::Branch(indexmap! {}), vec![&foo], "test/foo".into()),
+			output: (
+				Node::Branch(indexmap! {
+					"foo".into() => Node::Leaf("test/foo".into()),
+				}),
+				Ok(()),
+			),
 		},
 		Test {
-			description: "simple nested node",
-			node_before: Node::Root(Vec::new()),
-			input: (PathBuf::from("foo/bar"), Link::default()),
-			node_after: Node::Root(vec![Node::new_ref(Node::Branch {
-				path: PathBuf::from("foo"),
-				children: vec![Node::new_ref(Node::Leaf {
-					link_path: default_base_dir.join("bar"),
-					target_path: PathBuf::from("foo/bar"),
-					status: Status::Unknown,
-				})],
-			})]),
-			want: Ok(()),
+			description: "add sibling node to existing one",
+			input: (
+				Node::Branch(indexmap! {
+					"foo".into() => Node::Leaf("test/foo".into()),
+				}),
+				vec![&bar],
+				"yay/bar".into(),
+			),
+			output: (
+				Node::Branch(indexmap! {
+					"foo".into() => Node::Leaf("test/foo".into()),
+					"bar".into() => Node::Leaf("yay/bar".into()),
+				}),
+				Ok(()),
+			),
 		},
 		Test {
-			description: "simple node to existing branch",
-			node_before: Node::Root(vec![Node::new_ref(Node::Branch {
-				path: PathBuf::from("foo"),
-				children: vec![Node::new_ref(Node::Leaf {
-					link_path: default_base_dir.join("bar"),
-					target_path: PathBuf::from("foo/bar"),
-					status: Status::Unknown,
-				})],
-			})]),
-			input: (PathBuf::from("foo/test"), Link::default()),
-			node_after: Node::Root(vec![Node::new_ref(Node::Branch {
-				path: PathBuf::from("foo"),
-				children: vec![
-					Node::new_ref(Node::Leaf {
-						link_path: default_base_dir.join("bar"),
-						target_path: PathBuf::from("foo/bar"),
-						status: Status::Unknown,
+			description: "add nested node",
+			input: (
+				Node::Branch(indexmap! {}),
+				vec![&foo, &bar],
+				"test/bar".into(),
+			),
+			output: (
+				Node::Branch(indexmap! {
+					"foo".into() => Node::Branch(indexmap!{
+						"bar".into() => Node::Leaf("test/bar".into()),
 					}),
-					Node::new_ref(Node::Leaf {
-						link_path: default_base_dir.join("test"),
-						target_path: PathBuf::from("foo/test"),
-						status: Status::Unknown,
+				}),
+				Ok(()),
+			),
+		},
+		Test {
+			description: "add sibling to nested node",
+			input: (
+				Node::Branch(indexmap! {
+					"foo".into() => Node::Branch(indexmap!{
+						"bar".into() => Node::Leaf("test/bar".into()),
 					}),
-				],
-			})]),
-			want: Ok(()),
-		},
-		Test {
-			description: "leaf exists for simple node",
-			node_before: Node::Root(vec![Node::new_ref(Node::Leaf {
-				link_path: default_base_dir.join("foo"),
-				target_path: PathBuf::from("foo"),
-				status: Status::Unknown,
-			})]),
-			input: (PathBuf::from("foo"), Link::default()),
-			node_after: Node::Root(vec![Node::new_ref(Node::Leaf {
-				link_path: default_base_dir.join("foo"),
-				target_path: PathBuf::from("foo"),
-				status: Status::Unknown,
-			})]),
-			want: Err(AddError::LeafExists(PathBuf::from("foo"))),
-		},
-		Test {
-			description: "leaf exists for nested node",
-			node_before: Node::Root(vec![Node::new_ref(Node::Branch {
-				path: PathBuf::from("foo"),
-				children: vec![Node::new_ref(Node::Leaf {
-					link_path: default_base_dir.join("bar"),
-					target_path: PathBuf::from("bar"),
-					status: Status::Unknown,
-				})],
-			})]),
-			input: (PathBuf::from("foo"), Link::default()),
-			node_after: Node::Root(vec![Node::new_ref(Node::Branch {
-				path: PathBuf::from("foo"),
-				children: vec![Node::new_ref(Node::Leaf {
-					link_path: default_base_dir.join("bar"),
-					target_path: PathBuf::from("bar"),
-					status: Status::Unknown,
-				})],
-			})]),
-			want: Err(AddError::LeafExists(PathBuf::from("foo"))),
-		},
-		Test {
-			description: "new link name for simple first node",
-			node_before: Node::Root(Vec::new()),
-			input: (
-				PathBuf::from("foo"),
-				Link {
-					name: Some(PathBuf::from("new_name")),
-					..Link::default()
-				},
+				}),
+				vec![&foo, &baz],
+				"yay/baz".into(),
 			),
-			node_after: Node::Root(vec![Node::new_ref(Node::Leaf {
-				link_path: default_base_dir.join("new_name"),
-				target_path: PathBuf::from("foo"),
-				status: Status::Unknown,
-			})]),
-			want: Ok(()),
+			output: (
+				Node::Branch(indexmap! {
+					"foo".into() => Node::Branch(indexmap!{
+						"bar".into() => Node::Leaf("test/bar".into()),
+						"baz".into() => Node::Leaf("yay/baz".into()),
+					}),
+				}),
+				Ok(()),
+			),
 		},
 		Test {
-			description: "new link name for nested node",
-			node_before: Node::Root(Vec::new()),
+			description: "add existing node path",
 			input: (
-				PathBuf::from("foo/bar"),
-				Link {
-					name: Some(PathBuf::from("new_name")),
-					..Link::default()
-				},
+				Node::Branch(indexmap! {
+					"foo".into() => Node::Branch(indexmap!{
+						"bar".into() => Node::Leaf("test/bar".into()),
+					}),
+				}),
+				vec![&foo, &bar],
+				"please/let_me_in".into(),
 			),
-			node_after: Node::Root(vec![Node::new_ref(Node::Branch {
-				path: PathBuf::from("foo"),
-				children: vec![Node::new_ref(Node::Leaf {
-					link_path: default_base_dir.join("new_name"),
-					target_path: PathBuf::from("foo/bar"),
-					status: Status::Unknown,
-				})],
-			})]),
-			want: Ok(()),
+			output: (
+				Node::Branch(indexmap! {
+					"foo".into() => Node::Branch(indexmap!{
+						"bar".into() => Node::Leaf("test/bar".into()),
+					}),
+				}),
+				Err(Error::LeafExists("bar".into(), "please/let_me_in".into())),
+			),
 		},
 		Test {
-			description: "empty link name for simple first node",
-			node_before: Node::Root(Vec::new()),
+			description: "add node to a leaf node",
 			input: (
-				PathBuf::from("foo"),
-				Link {
-					name: Some(PathBuf::new()),
-					..Link::default()
-				},
+				Node::Branch(indexmap! {
+					"foo".into() => Node::Leaf("test/foo".into()),
+				}),
+				vec![&foo, &bar],
+				"please/let_me_in".into(),
 			),
-			node_after: Node::Root(vec![Node::new_ref(Node::Leaf {
-				link_path: default_base_dir.join("foo"),
-				target_path: PathBuf::from("foo"),
-				status: Status::Unknown,
-			})]),
-			want: Ok(()),
+			output: (
+				Node::Branch(indexmap! {
+					"foo".into() => Node::Leaf("test/foo".into()),
+				}),
+				Err(Error::NotABranch("bar".into(), "please/let_me_in".into())),
+			),
 		},
 		Test {
-			description: "empty link name for nested node",
-			node_before: Node::Root(Vec::new()),
+			description: "add node to a leaf node",
 			input: (
-				PathBuf::from("foo/bar"),
-				Link {
-					name: Some(PathBuf::new()),
-					..Link::default()
-				},
+				Node::Branch(indexmap! {}),
+				vec![],
+				"please/let_me_in".into(),
 			),
-			node_after: Node::Root(vec![Node::new_ref(Node::Branch {
-				path: PathBuf::from("foo"),
-				children: vec![Node::new_ref(Node::Leaf {
-					link_path: default_base_dir.join("bar"),
-					target_path: PathBuf::from("foo/bar"),
-					status: Status::Unknown,
-				})],
-			})]),
-			want: Ok(()),
+			output: (Node::Branch(indexmap! {}), Err(Error::EmptySegment)),
 		},
-		Test {
-			description: "different base directory for simple first node",
-			node_before: Node::Root(Vec::new()),
-			input: (
-				PathBuf::from("foo"),
-				Link {
-					base_dir: Some(PathBuf::from("alt_base_dir")),
-					..Link::default()
-				},
-			),
-			node_after: Node::Root(vec![Node::new_ref(Node::Leaf {
-				link_path: PathBuf::from("alt_base_dir").join("foo"),
-				target_path: PathBuf::from("foo"),
-				status: Status::Unknown,
-			})]),
-			want: Ok(()),
-		},
-		Test {
-			description: "empty link name for nested node with alternative base directory",
-			node_before: Node::Root(Vec::new()),
-			input: (
-				PathBuf::from("foo/bar"),
-				Link {
-					base_dir: Some(PathBuf::from("alt_base_dir")),
-					..Link::default()
-				},
-			),
-			node_after: Node::Root(vec![Node::new_ref(Node::Branch {
-				path: PathBuf::from("foo"),
-				children: vec![Node::new_ref(Node::Leaf {
-					link_path: PathBuf::from("alt_base_dir").join("bar"),
-					target_path: PathBuf::from("foo/bar"),
-					status: Status::Unknown,
-				})],
-			})]),
-			want: Ok(()),
-		},
-	];
-
-	for mut case in test_cases {
-		let got = case
-			.node_before
-			.add(&default_base_dir, case.input.0, case.input.1);
-
-		assert_eq!(got, case.want, "bad result for {:?}", case.description);
-		assert_eq!(
-			case.node_before, case.node_after,
-			"nodes mismatch for {:?}",
-			case.description
-		);
-	}
-}
-
-#[test]
-fn test_error_messages() {
-	let test_cases = vec![
-		(
-			AddError::LeafAsBranch(PathBuf::from("foo/bar")),
-			r#"node for "foo/bar" is leaf, not branch"#,
-		),
-		(
-			AddError::LeafExists(PathBuf::from("foo/bar")),
-			r#"leaf already exists for "foo/bar""#,
-		),
+		// TODO: Test edge cases that should return errors.
 	];
 
 	for case in test_cases {
-		let got = case.0.to_string();
+		let (mut tree, segments, link) = case.input;
 
-		assert_eq!(got, case.1);
+		let result = tree.add(segments, link);
+		let (want_tree, want_result) = case.output;
+
+		assert_eq!(
+			tree, want_tree,
+			"mismatch when adding nodes: {:?}",
+			case.description
+		);
+		assert_eq!(result, want_result);
 	}
 }

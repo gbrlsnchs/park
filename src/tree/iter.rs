@@ -1,163 +1,182 @@
-use std::rc::Rc;
+use std::path::{Path, PathBuf};
 
-use super::node::NodeRef;
+use super::node::Node;
 
 #[derive(Debug, PartialEq)]
-pub struct NodeEntry {
-	/// Whether the node is the deepest node in its level.
-	pub deepest: bool,
-	/// Level of the node. Root is at level 0, its children are at level 1, and so on.
+pub struct NodeMetadata {
 	pub level: usize,
-	/// Managed reference to the node it points to. Can be borrowed, mutably or not.
-	pub node_ref: NodeRef,
+	pub last_edge: bool,
 }
 
-/// Iterator for Tree. Performs depth-first search iteration.
-pub struct DepthFirstIter {
-	/// Stack that holds node entries.
-	stack: Vec<NodeEntry>,
+#[derive(Debug, PartialEq)]
+pub struct NodeIterEntry {
+	pub metadata: NodeMetadata,
+	pub target_path: PathBuf,
+	pub link_path: Option<PathBuf>,
 }
 
-impl DepthFirstIter {
-	pub fn new(root_ref: NodeRef) -> Self {
+struct NodeIterItem<'a> {
+	metadata: NodeMetadata,
+	segment: Option<&'a Path>,
+	node: &'a Node,
+}
+
+pub struct DepthFirstIter<'a> {
+	stack: Vec<NodeIterItem<'a>>,
+	path_stack: Vec<&'a Path>,
+}
+
+impl<'a> From<&'a Node> for DepthFirstIter<'a> {
+	fn from(root: &'a Node) -> Self {
 		DepthFirstIter {
-			stack: vec![NodeEntry {
-				deepest: false,
-				level: 0,
-				node_ref: root_ref,
+			stack: vec![NodeIterItem {
+				node: root,
+				segment: None,
+				metadata: NodeMetadata {
+					level: 0,
+					last_edge: false,
+				},
 			}],
+			path_stack: Vec::new(),
 		}
 	}
 }
 
-impl<'a> Iterator for DepthFirstIter {
-	type Item = NodeEntry;
+impl<'a> Iterator for DepthFirstIter<'a> {
+	type Item = NodeIterEntry;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let current = self.stack.pop()?;
-		let node = current.node_ref.borrow();
-		let children = node.get_children();
+		let NodeIterItem {
+			metadata: info,
+			segment,
+			node,
+		} = self.stack.pop()?;
 
-		if let Some(children) = children {
-			for (idx, child) in children.iter().rev().enumerate() {
-				self.stack.push(NodeEntry {
-					deepest: idx == 0,
-					level: current.level + 1,
-					node_ref: Rc::clone(child),
+		while info.level > 0 && info.level <= self.path_stack.len() {
+			self.path_stack.pop();
+		}
+
+		if let Some(segment) = segment {
+			self.path_stack.push(segment);
+		}
+
+		if let Some(children) = node.get_children() {
+			for (idx, (segment, child)) in children.iter().rev().enumerate() {
+				self.stack.push(NodeIterItem {
+					metadata: NodeMetadata {
+						level: info.level + 1,
+						last_edge: idx == 0,
+					},
+					segment: Some(segment),
+					node: child,
 				});
 			}
 		}
 
-		Some(NodeEntry {
-			deepest: current.deepest,
-			level: current.level,
-			node_ref: Rc::clone(&current.node_ref),
+		Some(NodeIterEntry {
+			metadata: info,
+			target_path: self.path_stack.iter().collect(),
+			link_path: node.get_link_path(),
 		})
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use std::path::PathBuf;
-
+	use indexmap::indexmap;
 	use pretty_assertions::assert_eq;
-
-	use crate::tree::node::{Node, Status};
 
 	use super::*;
 
 	#[test]
-	fn depth_first_iterator() {
-		let root = Node::Root(vec![
-			Node::new_ref(Node::Branch {
-				path: PathBuf::from("foo"),
-				children: vec![Node::new_ref(Node::Leaf {
-					link_path: PathBuf::new().join("bar"),
-					target_path: PathBuf::from("bar"),
-					status: Status::Unknown,
-				})],
+	fn iterate_in_correct_order() {
+		let root = Node::Branch(indexmap! {
+			"baz".into() => Node::Branch(indexmap!{
+				"qux".into() => Node::Leaf("test/quxlinkku".into()),
 			}),
-			Node::new_ref(Node::Branch {
-				path: PathBuf::from("qux"),
-				children: vec![Node::new_ref(Node::Leaf {
-					link_path: PathBuf::new().join("quux"),
-					target_path: PathBuf::from("quux"),
-					status: Status::Unknown,
-				})],
+			"test".into() => Node::Leaf("something/else".into()),
+			"foo".into() => Node::Branch(indexmap!{
+				"bar".into() => Node::Leaf("test/barlinkku".into()),
 			}),
-		]);
-
-		let iter = DepthFirstIter::new(Node::new_ref(root));
-		let got = iter.collect::<Vec<NodeEntry>>();
+		});
+		let mut iter = DepthFirstIter {
+			stack: vec![NodeIterItem {
+				node: &root,
+				segment: None,
+				metadata: NodeMetadata {
+					level: 0,
+					last_edge: false,
+				},
+			}],
+			path_stack: Vec::new(),
+		};
 
 		assert_eq!(
-			got,
-			vec![
-				NodeEntry {
-					deepest: false,
+			iter.next(),
+			Some(NodeIterEntry {
+				metadata: NodeMetadata {
 					level: 0,
-					node_ref: Node::new_ref(Node::Root(vec![
-						Node::new_ref(Node::Branch {
-							path: PathBuf::from("foo"),
-							children: vec![Node::new_ref(Node::Leaf {
-								link_path: PathBuf::new().join("bar"),
-								target_path: PathBuf::from("bar"),
-								status: Status::Unknown,
-							})],
-						}),
-						Node::new_ref(Node::Branch {
-							path: PathBuf::from("qux"),
-							children: vec![Node::new_ref(Node::Leaf {
-								link_path: PathBuf::new().join("quux"),
-								target_path: PathBuf::from("quux"),
-								status: Status::Unknown,
-							})],
-						}),
-					]))
+					last_edge: false
 				},
-				NodeEntry {
-					deepest: false,
-					level: 1,
-					node_ref: Node::new_ref(Node::Branch {
-						path: PathBuf::from("foo"),
-						children: vec![Node::new_ref(Node::Leaf {
-							link_path: PathBuf::new().join("bar"),
-							target_path: PathBuf::from("bar"),
-							status: Status::Unknown,
-						})],
-					})
-				},
-				NodeEntry {
-					level: 2,
-					deepest: true,
-					node_ref: Node::new_ref(Node::Leaf {
-						link_path: PathBuf::new().join("bar"),
-						target_path: PathBuf::from("bar"),
-						status: Status::Unknown,
-					})
-				},
-				NodeEntry {
-					deepest: true,
-					level: 1,
-					node_ref: Node::new_ref(Node::Branch {
-						path: PathBuf::from("qux"),
-						children: vec![Node::new_ref(Node::Leaf {
-							link_path: PathBuf::new().join("quux"),
-							target_path: PathBuf::from("quux"),
-							status: Status::Unknown,
-						})],
-					})
-				},
-				NodeEntry {
-					deepest: true,
-					level: 2,
-					node_ref: Node::new_ref(Node::Leaf {
-						link_path: PathBuf::new().join("quux"),
-						target_path: PathBuf::from("quux"),
-						status: Status::Unknown,
-					})
-				},
-			]
+				target_path: "".into(),
+				link_path: None,
+			}),
 		);
+		assert_eq!(
+			iter.next(),
+			Some(NodeIterEntry {
+				metadata: NodeMetadata {
+					level: 1,
+					last_edge: false
+				},
+				target_path: "baz".into(),
+				link_path: None,
+			}),
+		);
+		assert_eq!(
+			iter.next(),
+			Some(NodeIterEntry {
+				metadata: NodeMetadata {
+					level: 2,
+					last_edge: true
+				},
+				target_path: "baz/qux".into(),
+				link_path: Some("test/quxlinkku".into()),
+			}),
+		);
+		assert_eq!(
+			iter.next(),
+			Some(NodeIterEntry {
+				metadata: NodeMetadata {
+					level: 1,
+					last_edge: false
+				},
+				target_path: "test".into(),
+				link_path: Some("something/else".into()),
+			}),
+		);
+		assert_eq!(
+			iter.next(),
+			Some(NodeIterEntry {
+				metadata: NodeMetadata {
+					level: 1,
+					last_edge: true
+				},
+				target_path: "foo".into(),
+				link_path: None,
+			}),
+		);
+		assert_eq!(
+			iter.next(),
+			Some(NodeIterEntry {
+				metadata: NodeMetadata {
+					level: 2,
+					last_edge: true
+				},
+				target_path: "foo/bar".into(),
+				link_path: Some("test/barlinkku".into()),
+			}),
+		);
+		assert_eq!(iter.next(), None);
 	}
 }

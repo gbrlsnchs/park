@@ -168,6 +168,7 @@ version = "0.1.0"
 dependencies = [
  "ansi_term",
  "clap",
+ "indexmap",
  "indoc",
  "maplit",
  "pretty_assertions",

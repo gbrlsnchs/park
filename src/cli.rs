@@ -32,7 +32,7 @@ pub fn run() -> Result {
 
 	let args = Args::parse();
 
-	let tree = Tree::parse(
+	let mut tree = Tree::parse(
 		config,
 		args.tags
 			.iter()

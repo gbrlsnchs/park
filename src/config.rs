@@ -1,11 +1,11 @@
 use std::{
-	collections::{BTreeMap, HashSet},
+	collections::{HashMap, HashSet},
 	path::PathBuf,
 };
 
 use serde::Deserialize;
 
-pub type TargetMap = BTreeMap<PathBuf, Target>;
+pub type TargetMap = HashMap<PathBuf, Target>;
 
 #[derive(Debug, Default, Deserialize, PartialEq)]
 /// The main configuration for Park.
@@ -50,7 +50,7 @@ pub struct Link {
 #[cfg(test)]
 mod tests {
 	use indoc::indoc;
-	use maplit::{btreemap, hashset};
+	use maplit::{hashmap, hashset};
 	use pretty_assertions::assert_eq;
 
 	use super::*;
@@ -90,7 +90,7 @@ mod tests {
 				tags: Some(hashset! {String::from("foo"), String::from("bar")}),
 				base_dir: PathBuf::from("test"),
 				work_dir: Some(PathBuf::from("somewhere")),
-				targets: Some(btreemap! {}),
+				targets: Some(hashmap! {}),
 			}
 		);
 	}
@@ -113,7 +113,7 @@ mod tests {
 				tags: Some(hashset! {String::from("foo"), String::from("bar")}),
 				base_dir: PathBuf::from("test"),
 				work_dir: None,
-				targets: Some(btreemap! {
+				targets: Some(hashmap! {
 					PathBuf::from("baz") => Target{
 						link: None,
 						tags: None,
@@ -149,7 +149,7 @@ mod tests {
 				tags: Some(hashset! {String::from("foo"), String::from("bar")}),
 				base_dir: PathBuf::from("test"),
 				work_dir: None,
-				targets: Some(btreemap! {
+				targets: Some(hashmap! {
 					PathBuf::from("baz") => Target{
 						link: Some(Link{
 							name: Some(PathBuf::from("BAZ")),

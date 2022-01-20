@@ -1,26 +1,23 @@
 use std::{
-	cell::RefCell,
+	collections::HashMap,
 	env,
 	fmt::{Display, Error as FmtError, Formatter, Result as FmtResult},
 	io::{Error as IoError, Write},
 	os::unix::fs,
 	path::PathBuf,
-	rc::Rc,
 	str,
 };
 
 use ansi_term::Colour;
+use indexmap::IndexMap;
 use tabwriter::TabWriter;
 
-use crate::{
-	config::{Config, TagSet, Tags, Target},
-	tree::node::Status,
-};
+use crate::config::{Config, TagSet, Tags, Target};
 
-use self::{error::Error, iter::DepthFirstIter, node::NodeRef};
 use self::{
-	iter::NodeEntry,
-	node::{AddError, Node},
+	error::Error,
+	iter::{NodeIterEntry, NodeMetadata},
+	node::{error::Error as NodeError, Node, Status},
 };
 
 mod error;
@@ -30,28 +27,32 @@ mod node;
 #[cfg(test)]
 mod tests;
 
+pub type Statuses = HashMap<PathBuf, Status>;
+
 /// Structure representing all dotfiles after reading a configuration for Park.
 #[derive(Debug, PartialEq)]
 pub struct Tree {
-	root: NodeRef,
+	root: Node,
 	work_dir: PathBuf,
+	statuses: Statuses,
 }
 
 impl<'a> Tree {
 	/// Parses a configuration and returns a tree based on it.
-	pub fn parse(config: Config, mut runtime_tags: TagSet) -> Result<Self, AddError> {
+	pub fn parse(config: Config, mut runtime_tags: TagSet) -> Result<Self, NodeError> {
 		let targets = config.targets.unwrap_or_default();
 
 		let cwd = env::current_dir().unwrap_or_default();
 		let work_dir = config.work_dir.unwrap_or(cwd);
 
-		let tree = Tree {
-			root: Rc::new(RefCell::new(Node::Root(Vec::with_capacity(targets.len())))),
+		let mut tree = Tree {
+			root: Node::Branch(IndexMap::new()),
 			work_dir,
+			statuses: Statuses::new(),
 		};
 
 		let Config {
-			base_dir: ref default_base_dir,
+			base_dir: default_base_dir,
 			tags: default_tags,
 			..
 		} = config;
@@ -60,7 +61,7 @@ impl<'a> Tree {
 			runtime_tags.extend(default_tags);
 		}
 
-		'targets: for (target_path, target) in targets {
+		'targets: for (ref target_path, target) in targets {
 			let Target {
 				link,
 				tags: target_tags,
@@ -89,9 +90,12 @@ impl<'a> Tree {
 				continue;
 			}
 
-			tree.root
-				.borrow_mut()
-				.add(default_base_dir, target_path, link.unwrap_or_default())?;
+			let link = link.unwrap_or_default();
+			let base_dir = link.base_dir.as_ref().unwrap_or(&default_base_dir);
+			let link_path = link
+				.name
+				.map_or_else(|| base_dir.join(target_path), |name| base_dir.join(name));
+			tree.root.add(target_path.iter().collect(), link_path)?;
 		}
 
 		Ok(tree)
@@ -99,19 +103,23 @@ impl<'a> Tree {
 
 	/// Analyze the tree's nodes in order to check viability for symlinks to be done.
 	/// This means it will iterate the tree and update each node's status.
-	pub fn analyze(&self) -> Result<(), IoError> {
-		for NodeEntry { node_ref, .. } in self {
-			let mut node = node_ref.borrow_mut();
+	pub fn analyze(&mut self) -> Result<(), IoError> {
+		let Tree {
+			ref mut statuses,
+			ref root,
+			..
+		} = self;
 
-			if let Node::Leaf {
-				target_path,
-				link_path,
-				status,
-			} = &mut *node
-			{
+		for NodeIterEntry {
+			link_path,
+			target_path,
+			..
+		} in root
+		{
+			if let Some(link_path) = link_path {
 				if let Some(parent_dir) = link_path.parent() {
 					if parent_dir.exists() && !parent_dir.is_dir() {
-						*status = Status::Obstructed;
+						statuses.insert(link_path, Status::Obstructed);
 
 						continue;
 					}
@@ -120,11 +128,15 @@ impl<'a> Tree {
 				let existing_target_path = link_path.read_link();
 
 				if existing_target_path.is_err() {
-					*status = if link_path.exists() {
-						Status::Conflict
-					} else {
-						Status::Ready
-					};
+					let link_exists = link_path.exists();
+					statuses.insert(
+						link_path,
+						if link_exists {
+							Status::Conflict
+						} else {
+							Status::Ready
+						},
+					);
 
 					continue;
 				}
@@ -133,51 +145,56 @@ impl<'a> Tree {
 
 				let target_path = self.work_dir.join(target_path);
 
-				*status = if existing_target_path == target_path {
-					Status::Done
-				} else {
-					Status::Mismatch
-				}
+				statuses.insert(
+					link_path,
+					if existing_target_path == target_path {
+						Status::Done
+					} else {
+						Status::Mismatch
+					},
+				);
 			}
 		}
 
 		Ok(())
 	}
 
-	pub fn link(&self) -> Result<Vec<PathBuf>, Error> {
+	pub fn link(&self) -> Result<(), Error> {
 		let links: Result<Vec<(PathBuf, PathBuf)>, Error> = self
+			.root
 			.into_iter()
-			.filter(|NodeEntry { node_ref, .. }| {
-				let node = node_ref.borrow();
-
-				// Only leaves not already done should be linked.
-				match &*node {
-					Node::Leaf { status, .. } => *status != Status::Done,
-					_ => false,
+			.filter(|NodeIterEntry { link_path, .. }| link_path.is_some()) // filters branches
+			.filter(|NodeIterEntry { link_path, .. }| {
+				if let Some(Status::Done) = self.statuses.get(link_path.as_ref().unwrap()) {
+					return false;
 				}
-			})
-			.map(|NodeEntry { node_ref, .. }| {
-				let node = node_ref.borrow();
 
-				if let Node::Leaf {
-					status,
-					target_path,
-					link_path,
-				} = &*node
-				{
-					match status {
-						// TODO: Return more detailed errors.
-						Status::Mismatch | Status::Conflict | Status::Obstructed => {
-							return Err(Error::InternalError(link_path.clone()))
+				true
+			})
+			.map(
+				|NodeIterEntry {
+				     target_path,
+				     link_path,
+				     ..
+				 }| {
+					let link_path = link_path.unwrap();
+
+					if let Some(status) = self.statuses.get(&link_path) {
+						match status {
+							// TODO: Return more detailed errors.
+							Status::Unknown
+							| Status::Mismatch
+							| Status::Conflict
+							| Status::Obstructed => return Err(Error::InternalError(link_path.clone())),
+							_ => {}
 						}
-						_ => {}
+
+						return Ok((self.work_dir.join(target_path), link_path.clone()));
 					}
 
-					return Ok((self.work_dir.join(target_path), link_path.clone()));
-				}
-
-				unreachable!();
-			})
+					unreachable!();
+				},
+			)
 			.collect();
 
 		let mut created_links = Vec::new();
@@ -189,16 +206,7 @@ impl<'a> Tree {
 			created_links.push(link_path);
 		}
 
-		Ok(created_links)
-	}
-}
-
-impl<'a> IntoIterator for &'a Tree {
-	type Item = NodeEntry;
-	type IntoIter = DepthFirstIter;
-
-	fn into_iter(self) -> Self::IntoIter {
-		DepthFirstIter::new(Rc::clone(&self.root))
+		Ok(())
 	}
 }
 
@@ -209,15 +217,13 @@ impl<'a> Display for Tree {
 
 		let mut indent_blocks = Vec::<bool>::new();
 
-		for NodeEntry {
-			deepest,
-			level,
-			node_ref,
-		} in self
+		for NodeIterEntry {
+			metadata: NodeMetadata { last_edge, level },
+			target_path,
+			link_path,
+		} in &self.root
 		{
-			let node = node_ref.borrow();
-
-			if let Node::Root(..) = *node {
+			if level == 0 {
 				let cwd = Colour::Cyan.paint(self.work_dir.to_string_lossy());
 				if writeln!(
 					tab_writer,
@@ -237,7 +243,7 @@ impl<'a> Display for Tree {
 				indent_blocks.pop();
 			}
 
-			indent_blocks.push(deepest);
+			indent_blocks.push(last_edge);
 
 			for (idx, has_indent_guide) in indent_blocks.iter().enumerate() {
 				let is_leaf = idx == level - 1;
@@ -254,40 +260,36 @@ impl<'a> Display for Tree {
 				}
 			}
 
-			match &*node {
-				Node::Branch { path, .. } => {
-					if writeln!(tab_writer, "{}\t\t", path.to_string_lossy()).is_err() {
-						return Err(FmtError);
-					};
-				}
-				Node::Leaf {
-					target_path,
-					link_path,
-					status,
-				} => {
-					let status_style = match status {
-						Status::Unknown => Colour::White.dimmed(),
-						Status::Done => Colour::Blue.normal(),
-						Status::Ready => Colour::Green.normal(),
-						Status::Mismatch => Colour::Yellow.normal(),
-						Status::Conflict | Status::Obstructed => Colour::Red.normal(),
-					};
-					let status = format!("({:?})", status).to_uppercase();
+			if let Some(link_path) = link_path {
+				let default_status = Status::Unknown;
+				let status = self.statuses.get(&link_path).unwrap_or(&default_status);
 
-					if writeln!(
-						tab_writer,
-						"{target_path}\t{arrow} {link_path}\t{status}",
-						target_path = target_path.file_name().unwrap().to_string_lossy(),
-						arrow = Colour::White.dimmed().paint("<-"),
-						link_path = Colour::Purple.paint(link_path.to_string_lossy()),
-						status = status_style.bold().paint(status),
-					)
-					.is_err()
-					{
-						return Err(FmtError);
-					};
-				}
-				_ => {}
+				let status_style = match status {
+					Status::Unknown => Colour::White.dimmed(),
+					Status::Done => Colour::Blue.normal(),
+					Status::Ready => Colour::Green.normal(),
+					Status::Mismatch => Colour::Yellow.normal(),
+					Status::Conflict | Status::Obstructed => Colour::Red.normal(),
+				};
+				let status = format!("({:?})", status).to_uppercase();
+
+				if writeln!(
+					tab_writer,
+					"{target_path}\t{arrow} {link_path}\t{status}",
+					target_path = target_path.file_name().unwrap().to_string_lossy(),
+					arrow = Colour::White.dimmed().paint("<-"),
+					link_path = Colour::Purple.paint(link_path.to_string_lossy()),
+					status = status_style.bold().paint(status),
+				)
+				.is_err()
+				{
+					return Err(FmtError);
+				};
+			} else {
+				let path = target_path.file_name().unwrap();
+				if writeln!(tab_writer, "{}\t\t", path.to_string_lossy()).is_err() {
+					return Err(FmtError);
+				};
 			}
 		}
 
