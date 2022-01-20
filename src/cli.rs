@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::ffi::OsString;
-use std::io::{self, Read, Write};
+use std::io::Write;
 use std::result::Result as StdResult;
 
 use clap::Parser;
@@ -21,14 +21,8 @@ pub struct Args {
 }
 
 /// Runs the program, parsing STDIN for a config file.
-pub fn run() -> Result {
-	let mut input = String::new();
-
-	let stdin = io::stdin();
-	let mut handle = stdin.lock();
-	handle.read_to_string(&mut input)?;
-
-	let config: Config = toml::from_str(&input)?;
+pub fn run(input: &str, mut stdout: impl Write) -> Result {
+	let config: Config = toml::from_str(input)?;
 
 	let args = Args::parse();
 
@@ -42,14 +36,60 @@ pub fn run() -> Result {
 
 	tree.analyze()?;
 
-	let stdout = io::stdout();
-	let mut handle = stdout.lock();
-
 	if args.link {
 		let _results = tree.link()?;
 	} else {
-		write!(handle, "{}", tree)?;
+		write!(stdout, "{}", tree)?;
 	}
 
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use std::env;
+
+	use ansi_term::Colour;
+	use indoc::indoc;
+	use pretty_assertions::assert_eq;
+
+	use super::*;
+
+	#[test]
+	fn test_running_without_args() -> Result {
+		let input = indoc! {r#"
+			base_dir = "tests"
+
+			[targets.foo]
+			[targets.bar]
+		"#};
+		let mut stdout = Vec::new();
+
+		run(input, &mut stdout)?;
+
+		let link_color = Colour::Purple.normal();
+		let symbols_color = Colour::White.dimmed();
+		let current_dir = env::current_dir().unwrap_or_default();
+
+		assert_eq!(
+			String::from_utf8(stdout).unwrap(),
+			format!(
+				indoc! {"
+				.       {equals} {current_dir}
+				{t_bar}bar {arrow} {bar} {ready}
+				{l_bar}foo {arrow} {foo} {ready}
+			"},
+				t_bar = symbols_color.paint("├── "),
+				l_bar = symbols_color.paint("└── "),
+				equals = symbols_color.paint(":="),
+				arrow = symbols_color.paint("<-"),
+				current_dir = Colour::Cyan.paint(current_dir.to_string_lossy()),
+				foo = link_color.paint("tests/foo"),
+				bar = link_color.paint("tests/bar"),
+				ready = Colour::Green.bold().paint("(READY)"),
+			)
+		);
+
+		Ok(())
+	}
 }
