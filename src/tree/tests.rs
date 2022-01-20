@@ -270,18 +270,18 @@ fn analyze_tree() -> Result<(), IoError> {
 			description: "single target should be ready",
 			input: Tree {
 				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Leaf(current_dir.join("foo")),
+					"foo".into() => Node::Leaf("foo".into()),
 				}),
 				work_dir: current_dir.into(),
 				statuses: hashmap! {},
 			},
 			output: Tree {
 				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Leaf(current_dir.join("foo")),
+					"foo".into() => Node::Leaf("foo".into()),
 				}),
 				work_dir: current_dir.into(),
 				statuses: hashmap! {
-					current_dir.join("foo") => Status::Ready,
+					"foo".into() => Status::Ready,
 				},
 			},
 		},
@@ -289,18 +289,18 @@ fn analyze_tree() -> Result<(), IoError> {
 			description: "single target has conflict",
 			input: Tree {
 				root: Node::Branch(indexmap! {
-					"README.md".into() => Node::Leaf(current_dir.join("README.md")),
+					"README.md".into() => Node::Leaf("README.md".into()),
 				}),
 				work_dir: current_dir.into(),
 				statuses: hashmap! {},
 			},
 			output: Tree {
 				root: Node::Branch(indexmap! {
-					"README.md".into() => Node::Leaf(current_dir.join("README.md")),
+					"README.md".into() => Node::Leaf("README.md".into()),
 				}),
 				work_dir: current_dir.into(),
 				statuses: hashmap! {
-					current_dir.join("README.md") => Status::Conflict,
+					"README.md".into() => Status::Conflict,
 				},
 			},
 		},
