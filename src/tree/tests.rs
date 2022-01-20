@@ -56,7 +56,7 @@ fn parse() -> Result<(), IoError> {
 			output: Ok(Tree {
 				root: Node::Branch(indexmap! {
 					"foo".into() => Node::Branch(indexmap!{
-						"bar".into() => Node::Leaf("foo/bar".into()),
+						"bar".into() => Node::Leaf("bar".into()),
 					}),
 				}),
 				work_dir: current_dir.into(),
@@ -216,6 +216,29 @@ fn parse() -> Result<(), IoError> {
 			output: Ok(Tree {
 				root: Node::Branch(indexmap! {
 					"foo".into() => Node::Leaf("foo".into()),
+				}),
+				work_dir: current_dir.into(),
+				statuses: hashmap! {},
+			}),
+		},
+		Test {
+			description: "target using its file name as link name",
+			input: (
+				Config {
+					targets: Some(hashmap! {
+						"foo/bar/baz".into() => Target::default(),
+					}),
+					..Config::default()
+				},
+				hashset! {},
+			),
+			output: Ok(Tree {
+				root: Node::Branch(indexmap! {
+					"foo".into() => Node::Branch(indexmap!{
+						"bar".into() => Node::Branch(indexmap!{
+							"baz".into() => Node::Leaf("baz".into()),
+						}),
+					}),
 				}),
 				work_dir: current_dir.into(),
 				statuses: hashmap! {},

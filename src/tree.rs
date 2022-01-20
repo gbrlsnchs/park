@@ -94,9 +94,15 @@ impl<'a> Tree {
 
 			let link = link.unwrap_or_default();
 			let base_dir = link.base_dir.as_ref().unwrap_or(&default_base_dir);
-			let link_path = link
-				.name
-				.map_or_else(|| base_dir.join(target_path), |name| base_dir.join(name));
+			let link_path = link.name.map_or_else(
+				|| {
+					target_path
+						.file_name()
+						.map(|file_name| base_dir.join(file_name))
+						.unwrap()
+				},
+				|name| base_dir.join(name),
+			);
 			tree.root.add(target_path.iter().collect(), link_path)?;
 		}
 
