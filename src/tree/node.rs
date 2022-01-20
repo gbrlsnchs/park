@@ -63,12 +63,14 @@ impl Node {
 					}
 
 					self_children.insert(key, Self::Leaf(link_path));
+					self_children.sort_keys();
 				} else if let Some(branch_node) = next {
 					branch_node.add(segments.into(), link_path)?;
 				} else {
 					let mut branch_node = Self::Branch(IndexMap::new());
 					branch_node.add(segments.into(), link_path)?;
 					self_children.insert(key, branch_node);
+					self_children.sort_keys();
 				}
 				Ok(())
 			}

@@ -16,6 +16,7 @@ fn test_add_nodes() {
 	let foo = OsString::from("foo");
 	let bar = OsString::from("bar");
 	let baz = OsString::from("baz");
+	let capital_e = OsString::from("E");
 
 	let test_cases = vec![
 		Test {
@@ -127,7 +128,29 @@ fn test_add_nodes() {
 			),
 			output: (Node::Branch(indexmap! {}), Err(Error::EmptySegment)),
 		},
-		// TODO: Test edge cases that should return errors.
+		Test {
+			description: "add nodes to get sorted",
+			input: (
+				Node::Branch(indexmap! {
+					"C".into() => Node::Leaf("1".into()),
+					"Z".into() => Node::Leaf("2".into()),
+					"B".into() => Node::Leaf("3".into()),
+					"A".into() => Node::Leaf("4".into()),
+				}),
+				vec![&capital_e],
+				"5".into(),
+			),
+			output: (
+				Node::Branch(indexmap! {
+					"A".into() => Node::Leaf("4".into()),
+					"B".into() => Node::Leaf("3".into()),
+					"C".into() => Node::Leaf("1".into()),
+					"E".into() => Node::Leaf("5".into()),
+					"Z".into() => Node::Leaf("2".into()),
+				}),
+				Ok(()),
+			),
+		},
 	];
 
 	for case in test_cases {
