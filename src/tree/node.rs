@@ -1,12 +1,16 @@
-use std::{ffi::OsStr, path::PathBuf};
+use std::{
+	ffi::OsStr,
+	path::{Path, PathBuf},
+};
 
 use indexmap::IndexMap;
 
 use self::error::Error;
 
-use super::iter::{DepthFirstIter, NodeIterEntry};
+use self::iter::{Algorithm, Element, Iter, SearchAlgorithm};
 
 pub mod error;
+pub mod iter;
 
 #[cfg(test)]
 mod tests;
@@ -28,8 +32,10 @@ pub enum Status {
 	Obstructed,
 }
 
+/// Alias for a node's edges.
 pub type Edges = IndexMap<PathBuf, Node>;
 
+/// Node for a recursive tree that holds symlink paths. It is either a branch or a leaf.
 #[derive(Debug, PartialEq)]
 pub enum Node {
 	Branch(Edges),
@@ -37,6 +43,7 @@ pub enum Node {
 }
 
 impl Node {
+	/// Adds new paths to the node. Each segment becomes a new node.
 	pub fn add(&mut self, segments: Vec<&OsStr>, link_path: PathBuf) -> Result<(), Error> {
 		let segments = segments.split_first();
 		if segments.is_none() {
@@ -69,6 +76,7 @@ impl Node {
 		}
 	}
 
+	/// Returns the node's children if it's a branch, otherwise returns None.
 	pub fn get_children(&self) -> Option<&Edges> {
 		match self {
 			Self::Branch(edges) => Some(edges),
@@ -76,18 +84,18 @@ impl Node {
 		}
 	}
 
-	pub fn get_link_path(&self) -> Option<PathBuf> {
+	/// Returns the node's link path if it's a leaf, otherwise returns None.
+	pub fn get_link_path(&self) -> Option<&Path> {
 		match self {
 			Self::Branch(_) => None,
-			// TODO: Return reference?
-			Self::Leaf(path) => Some(path.clone()),
+			Self::Leaf(path) => Some(path),
 		}
 	}
 }
 
 impl<'a> IntoIterator for &'a Node {
-	type Item = NodeIterEntry;
-	type IntoIter = DepthFirstIter<'a>;
+	type Item = Element;
+	type IntoIter = Iter<'a, { Algorithm::DepthFirstSearch as SearchAlgorithm }>;
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.into()

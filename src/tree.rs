@@ -16,12 +16,14 @@ use crate::config::{Config, TagSet, Tags, Target};
 
 use self::{
 	error::Error,
-	iter::{NodeIterEntry, NodeMetadata},
-	node::{error::Error as NodeError, Node, Status},
+	node::{
+		error::Error as NodeError,
+		iter::{Element as IterElement, NodeMetadata},
+		Node, Status,
+	},
 };
 
 mod error;
-mod iter;
 mod node;
 
 #[cfg(test)]
@@ -110,7 +112,7 @@ impl<'a> Tree {
 			..
 		} = self;
 
-		for NodeIterEntry {
+		for IterElement {
 			link_path,
 			target_path,
 			..
@@ -163,8 +165,8 @@ impl<'a> Tree {
 		let links: Result<Vec<(PathBuf, PathBuf)>, Error> = self
 			.root
 			.into_iter()
-			.filter(|NodeIterEntry { link_path, .. }| link_path.is_some()) // filters branches
-			.filter(|NodeIterEntry { link_path, .. }| {
+			.filter(|IterElement { link_path, .. }| link_path.is_some()) // filters branches
+			.filter(|IterElement { link_path, .. }| {
 				if let Some(Status::Done) = self.statuses.get(link_path.as_ref().unwrap()) {
 					return false;
 				}
@@ -172,7 +174,7 @@ impl<'a> Tree {
 				true
 			})
 			.map(
-				|NodeIterEntry {
+				|IterElement {
 				     target_path,
 				     link_path,
 				     ..
@@ -185,7 +187,7 @@ impl<'a> Tree {
 							Status::Unknown
 							| Status::Mismatch
 							| Status::Conflict
-							| Status::Obstructed => return Err(Error::InternalError(link_path.clone())),
+							| Status::Obstructed => return Err(Error::InternalError(link_path)),
 							_ => {}
 						}
 
@@ -217,8 +219,11 @@ impl<'a> Display for Tree {
 
 		let mut indent_blocks = Vec::<bool>::new();
 
-		for NodeIterEntry {
-			metadata: NodeMetadata { last_edge, level },
+		for IterElement {
+			metadata: NodeMetadata {
+				last_sibling: last_edge,
+				level,
+			},
 			target_path,
 			link_path,
 		} in &self.root
