@@ -17,3 +17,7 @@ toml = "0.5.8"
 indoc = "1.0.3"
 maplit = "1.0.2"
 pretty_assertions = "0.7.2"
+
+[build-dependencies]
+clap = { version = "3.0.5", features = ["derive"] }
+clap_complete = "3.0.4"
