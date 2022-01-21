@@ -2,13 +2,15 @@ use std::io::{self, Read};
 
 use clap::Parser;
 
-use cli::{Args, Result as CliResult};
+use cli::Args;
+use command::Result as CommandResult;
 
 mod cli;
+mod command;
 mod config;
 mod tree;
 
-fn main() -> CliResult {
+fn main() -> CommandResult {
 	let mut input = String::new();
 
 	let stdin = io::stdin();
@@ -20,7 +22,7 @@ fn main() -> CliResult {
 
 	let args = Args::parse();
 
-	cli::run(&input, handle, args)?;
+	command::run(&input, handle, args)?;
 
 	Ok(())
 }
