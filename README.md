@@ -76,3 +76,13 @@ The configuration consists of the following fields:
 		  tags in it need to be provided by the user in order for the target to be evaluated
 		- `any_of` (array of strings, optional): Represents disjunctive tags and, if not empty, at
 		  least one of its tags needs to be provided in order for the target to be evaluated
+
+## Building the project
+This project is built entirely in Rust, so it's just a matter of running `cargo build` with the
+appropriate flags for your environment. For example:
+```console
+$ cargo build --release
+```
+
+This project also generates shell completions for Bash, ZSH and Fish, which are available at
+`target/completions` after the build is complete.
