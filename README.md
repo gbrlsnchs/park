@@ -1,4 +1,5 @@
 # Park
+[![GitLab CI Pipeline](https://gitlab.com/gbrlsnchs/park/badges/trunk/pipeline.svg)](https://gitlab.com/gbrlsnchs/park/-/commits/trunk)
 
 ## About
 Park is a configuration-based dotfiles manager. It reads TOMLs files directly from stdin in order to
