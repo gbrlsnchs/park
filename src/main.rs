@@ -10,7 +10,10 @@ mod command;
 mod config;
 mod tree;
 
+// TODO: Test CLI interactions.
 fn main() -> CommandResult {
+	let args = Args::parse();
+
 	let mut input = String::new();
 
 	let stdin = io::stdin();
@@ -19,8 +22,6 @@ fn main() -> CommandResult {
 
 	let stdout = io::stdout();
 	let handle = stdout.lock();
-
-	let args = Args::parse();
 
 	command::run(&input, handle, args)?;
 
