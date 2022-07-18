@@ -3,15 +3,15 @@ use std::io::{self, Read};
 use clap::Parser;
 
 use cli::Args;
-use command::Result as CommandResult;
+use run::Result as RunResult;
 
 mod cli;
-mod command;
 mod config;
+mod run;
 mod tree;
 
 // TODO: Test CLI interactions.
-fn main() -> CommandResult {
+fn main() -> RunResult {
 	let args = Args::parse();
 
 	let mut input = String::new();
@@ -23,7 +23,7 @@ fn main() -> CommandResult {
 	let stdout = io::stdout();
 	let handle = stdout.lock();
 
-	command::run(&input, handle, args)?;
+	run::run(&input, handle, args)?;
 
 	Ok(())
 }
