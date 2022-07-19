@@ -11,18 +11,18 @@ pub type Result = StdResult<(), Box<dyn Error>>;
 /// Runs the program, parsing STDIN for a config file.
 pub fn run(input: &str, mut stdout: impl Write, args: Args) -> Result {
 	let config: Config = toml::from_str(input)?;
+	let Args { link, filters } = args;
 
-	let mut tree = Tree::parse(
-		config,
-		args.tags
-			.iter()
-			.map(|tag| tag.to_string_lossy().into())
-			.collect(),
-	)?;
+	let (tags, _targets): (Vec<String>, Vec<String>) =
+		filters.into_iter().partition(|s| s.starts_with('+'));
+
+	let tags = tags.iter().map(|s| &s[1..]).map(|s| s.into()).collect();
+
+	let mut tree = Tree::parse(config, tags)?;
 
 	tree.analyze()?;
 
-	if args.link {
+	if link {
 		let _results = tree.link()?;
 	} else {
 		write!(stdout, "{}", tree)?;
@@ -94,7 +94,7 @@ mod tests {
 			input,
 			&mut stdout,
 			Args {
-				tags: vec!["foo".into()],
+				filters: vec!["+foo".into()],
 				..Args::default()
 			},
 		)?;

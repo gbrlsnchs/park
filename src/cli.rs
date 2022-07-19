@@ -1,5 +1,3 @@
-use std::ffi::OsString;
-
 use clap::Parser;
 
 /// Command-line arguments.
@@ -10,7 +8,7 @@ pub struct Args {
 	#[clap(long, short, help = "Try to link eligible targets")]
 	pub link: bool,
 
-	/// Runtime tags.
-	#[clap(parse(from_os_str), help = "List of additional tags")]
-	pub tags: Vec<OsString>,
+	/// Runtime tags or file prefixes.
+	#[clap(value_parser, help = "List of additional tags")]
+	pub filters: Vec<String>,
 }
