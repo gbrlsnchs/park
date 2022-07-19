@@ -1,9 +1,8 @@
 use std::{
+	collections::BTreeMap,
 	ffi::OsStr,
 	path::{Path, PathBuf},
 };
-
-use indexmap::IndexMap;
 
 use self::error::Error;
 
@@ -33,7 +32,7 @@ pub enum Status {
 }
 
 /// Alias for a node's edges.
-pub type Edges = IndexMap<PathBuf, Node>;
+pub type Edges = BTreeMap<PathBuf, Node>;
 
 /// Node for a recursive tree that holds symlink paths. It is either a branch or a leaf.
 #[derive(Debug, PartialEq)]
@@ -63,14 +62,12 @@ impl Node {
 					}
 
 					self_children.insert(key, Self::Leaf(link_path));
-					self_children.sort_keys();
 				} else if let Some(branch_node) = next {
 					branch_node.add(segments.into(), link_path)?;
 				} else {
-					let mut branch_node = Self::Branch(IndexMap::new());
+					let mut branch_node = Self::Branch(Edges::new());
 					branch_node.add(segments.into(), link_path)?;
 					self_children.insert(key, branch_node);
-					self_children.sort_keys();
 				}
 				Ok(())
 			}

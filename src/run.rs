@@ -130,10 +130,10 @@ mod tests {
 		let input = indoc! {r#"
 			base_dir = "tests"
 
-			[targets.foo]
-			tags.all_of = ["foo"]
+			[targets.skip_me]
+			tags.all_of = ["dont_skip"]
 
-			[targets.bar]
+			[targets.my_symlink]
 		"#};
 		let mut stdout = Vec::new();
 
@@ -146,7 +146,7 @@ mod tests {
 			},
 		)?;
 
-		let link_path = "tests/bar";
+		let link_path = "tests/my_symlink";
 		let link = PathBuf::from(link_path).read_link();
 		fs::remove_file(link_path)?;
 

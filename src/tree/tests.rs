@@ -1,12 +1,10 @@
 use std::{fs, path::PathBuf};
 
-use indexmap::indexmap;
 use indoc::indoc;
-use maplit::{hashmap, hashset};
 use pretty_assertions::assert_eq;
 
 use crate::{
-	config::{Link, Tags},
+	config::{Link, TagSet, Tags, TargetMap},
 	tree::node::{error::Error as NodeError, Status},
 };
 
@@ -22,229 +20,206 @@ fn parse() -> Result<(), IoError> {
 
 	let current_dir = &env::current_dir()?;
 
-	let test_cases = vec![
+	let test_cases = Vec::from([
 		Test {
 			description: "simple config with a single target",
 			input: (
 				Config {
-					targets: Some(hashmap! {
-						"foo".into() => Target::default()
-					}),
+					targets: Some(TargetMap::from([("foo".into(), Target::default())])),
 					..Config::default()
 				},
-				hashset! {},
+				TagSet::new(),
 			),
 			output: Ok(Tree {
-				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Leaf("foo".into()),
-				}),
+				root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			}),
 		},
 		Test {
 			description: "simple config with a nested target",
 			input: (
 				Config {
-					targets: Some(hashmap! {
-						"foo/bar".into() => Target::default()
-					}),
+					targets: Some(TargetMap::from([("foo/bar".into(), Target::default())])),
 					..Config::default()
 				},
-				hashset! {},
+				TagSet::new(),
 			),
 			output: Ok(Tree {
-				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Branch(indexmap!{
-						"bar".into() => Node::Leaf("bar".into()),
-					}),
-				}),
+				root: Node::Branch(Edges::from([(
+					"foo".into(),
+					Node::Branch(Edges::from([("bar".into(), Node::Leaf("bar".into()))])),
+				)])),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			}),
 		},
 		Test {
 			description: "target with custom options",
 			input: (
 				Config {
-					targets: Some(hashmap! {
-						"foo".into() => Target{
-							link: Some(Link{
+					targets: Some(TargetMap::from([(
+						"foo".into(),
+						Target {
+							link: Some(Link {
 								name: Some("new_name".into()),
 								..Link::default()
 							}),
 							..Target::default()
-						}
-					}),
+						},
+					)])),
 					..Config::default()
 				},
-				hashset! {},
+				TagSet::new(),
 			),
 			output: Ok(Tree {
-				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Leaf("new_name".into()),
-				}),
+				root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("new_name".into()))])),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			}),
 		},
 		Test {
 			description: "target disabled due to conjunctive tags",
 			input: (
 				Config {
-					targets: Some(hashmap! {
-						"foo".into() => Target{
-							tags: Some(Tags{
-								all_of: Some(hashset!{"test".into()}),
-								any_of: Some(hashset!{"foo/bar".into()}),
+					targets: Some(TargetMap::from([(
+						"foo".into(),
+						Target {
+							tags: Some(Tags {
+								all_of: Some(TagSet::from(["test".into()])),
+								any_of: Some(TagSet::from(["foo/bar".into()])),
 							}),
 							..Target::default()
 						},
-					}),
+					)])),
 					..Config::default()
 				},
-				hashset! {
-					"foo".into(),
-					"bar".into(),
-				},
+				TagSet::from(["foo".into(), "bar".into()]),
 			),
 			output: Ok(Tree {
-				root: Node::Branch(indexmap! {}),
+				root: Node::Branch(Edges::new()),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			}),
 		},
 		Test {
 			description: "target enabled with tags #1",
 			input: (
 				Config {
-					targets: Some(hashmap! {
-						"foo".into() => Target{
-							tags: Some(Tags{
-								all_of: Some(hashset!{"test".into()}),
+					targets: Some(TargetMap::from([(
+						"foo".into(),
+						Target {
+							tags: Some(Tags {
+								all_of: Some(TagSet::from(["test".into()])),
 								..Tags::default()
 							}),
 							..Target::default()
 						},
-					}),
+					)])),
 					..Config::default()
 				},
-				hashset! {
-					"test".into(),
-				},
+				TagSet::from(["test".into()]),
 			),
 			output: Ok(Tree {
-				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Leaf("foo".into()),
-				}),
+				root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			}),
 		},
 		Test {
 			description: "target enabled with tags #2",
 			input: (
 				Config {
-					targets: Some(hashmap! {
-						"foo".into() => Target{
-							tags: Some(Tags{
-								all_of: Some(hashset!{"test".into()}),
-								any_of: Some(hashset!{"foo".into(), "bar".into()}),
+					targets: Some(TargetMap::from([(
+						"foo".into(),
+						Target {
+							tags: Some(Tags {
+								all_of: Some(TagSet::from(["test".into()])),
+								any_of: Some(TagSet::from(["foo".into(), "bar".into()])),
 							}),
 							..Target::default()
 						},
-					}),
+					)])),
 					..Config::default()
 				},
-				hashset! {
-					"test".into(),
-					"bar".into(),
-				},
+				TagSet::from(["test".into(), "bar".into()]),
 			),
 			output: Ok(Tree {
-				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Leaf("foo".into()),
-				}),
+				root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			}),
 		},
 		Test {
 			description: "target disabled due to disjunctive tags",
 			input: (
 				Config {
-					targets: Some(hashmap! {
-						"foo".into() => Target{
-							tags: Some(Tags{
-								all_of: Some(hashset!{"test".into()}),
-								any_of: Some(hashset!{"foo".into(), "bar".into()}),
+					targets: Some(TargetMap::from([(
+						"foo".into(),
+						Target {
+							tags: Some(Tags {
+								all_of: Some(TagSet::from(["test".into()])),
+								any_of: Some(TagSet::from(["foo".into(), "bar".into()])),
 							}),
 							..Target::default()
 						},
-					}),
+					)])),
 					..Config::default()
 				},
-				hashset! {
-					"test".into(),
-				},
+				TagSet::from(["test".into()]),
 			),
 			output: Ok(Tree {
-				root: Node::Branch(indexmap! {}),
+				root: Node::Branch(Edges::new()),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			}),
 		},
 		Test {
 			description: "target enabled with tags #3",
 			input: (
 				Config {
-					targets: Some(hashmap! {
-						"foo".into() => Target{
-							tags: Some(Tags{
-								any_of: Some(hashset!{"test".into()}),
+					targets: Some(TargetMap::from([(
+						"foo".into(),
+						Target {
+							tags: Some(Tags {
+								any_of: Some(TagSet::from(["test".into()])),
 								..Tags::default()
 							}),
 							..Target::default()
 						},
-					}),
+					)])),
 					..Config::default()
 				},
-				hashset! {
-					"test".into(),
-				},
+				TagSet::from(["test".into()]),
 			),
 			output: Ok(Tree {
-				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Leaf("foo".into()),
-				}),
+				root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			}),
 		},
 		Test {
 			description: "target using its file name as link name",
 			input: (
 				Config {
-					targets: Some(hashmap! {
-						"foo/bar/baz".into() => Target::default(),
-					}),
+					targets: Some(TargetMap::from([("foo/bar/baz".into(), Target::default())])),
 					..Config::default()
 				},
-				hashset! {},
+				TagSet::new(),
 			),
 			output: Ok(Tree {
-				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Branch(indexmap!{
-						"bar".into() => Node::Branch(indexmap!{
-							"baz".into() => Node::Leaf("baz".into()),
-						}),
-					}),
-				}),
+				root: Node::Branch(Edges::from([(
+					"foo".into(),
+					Node::Branch(Edges::from([(
+						"bar".into(),
+						Node::Branch(Edges::from([("baz".into(), Node::Leaf("baz".into()))])),
+					)])),
+				)])),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			}),
 		},
-	];
+	]);
 
 	for case in test_cases {
 		let got = Tree::parse(case.input.0, case.input.1);
@@ -265,103 +240,97 @@ fn analyze_tree() -> Result<(), IoError> {
 
 	let current_dir = &env::current_dir()?;
 
-	let test_cases = vec![
+	let test_cases = Vec::from([
 		Test {
 			description: "single target should be ready",
 			input: Tree {
-				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Leaf("foo".into()),
-				}),
+				root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			},
 			output: Tree {
-				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Leaf("foo".into()),
-				}),
+				root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {
-					"foo".into() => Status::Ready,
-				},
+				statuses: Statuses::from([("foo".into(), Status::Ready)]),
 			},
 		},
 		Test {
 			description: "single target has conflict",
 			input: Tree {
-				root: Node::Branch(indexmap! {
-					"README.md".into() => Node::Leaf("README.md".into()),
-				}),
+				root: Node::Branch(Edges::from([(
+					"README.md".into(),
+					Node::Leaf("README.md".into()),
+				)])),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			},
 			output: Tree {
-				root: Node::Branch(indexmap! {
-					"README.md".into() => Node::Leaf("README.md".into()),
-				}),
+				root: Node::Branch(Edges::from([(
+					"README.md".into(),
+					Node::Leaf("README.md".into()),
+				)])),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {
-					"README.md".into() => Status::Conflict,
-				},
+				statuses: Statuses::from([("README.md".into(), Status::Conflict)]),
 			},
 		},
 		Test {
 			description: "single target with wrong existing link",
 			input: Tree {
-				root: Node::Branch(indexmap! {
-					"something".into() => Node::Leaf("tests/data/something".into()),
-				}),
+				root: Node::Branch(Edges::from([(
+					"something".into(),
+					Node::Leaf("tests/data/something".into()),
+				)])),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			},
 			output: Tree {
-				root: Node::Branch(indexmap! {
-					"something".into() => Node::Leaf("tests/data/something".into()),
-				}),
+				root: Node::Branch(Edges::from([(
+					"something".into(),
+					Node::Leaf("tests/data/something".into()),
+				)])),
 				work_dir: current_dir.into(),
-				statuses: hashmap! {
-					"tests/data/something".into() => Status::Mismatch,
-				},
+				statuses: Statuses::from([("tests/data/something".into(), Status::Mismatch)]),
 			},
 		},
 		Test {
 			description: "single target with correct existing link",
 			input: Tree {
-				root: Node::Branch(indexmap! {
-					"something".into() => Node::Leaf("tests/data/something".into()),
-				}),
+				root: Node::Branch(Edges::from([(
+					"something".into(),
+					Node::Leaf("tests/data/something".into()),
+				)])),
 				work_dir: "test".into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			},
 			output: Tree {
-				root: Node::Branch(indexmap! {
-					"something".into() => Node::Leaf("tests/data/something".into()),
-				}),
+				root: Node::Branch(Edges::from([(
+					"something".into(),
+					Node::Leaf("tests/data/something".into()),
+				)])),
 				work_dir: "test".into(),
-				statuses: hashmap! {
-					"tests/data/something".into() => Status::Done,
-				},
+				statuses: Statuses::from([("tests/data/something".into(), Status::Done)]),
 			},
 		},
 		Test {
 			description: "link with invalid parent directory",
 			input: Tree {
-				root: Node::Branch(indexmap! {
-					"something".into() => Node::Leaf("LICENSE/something".into()),
-				}),
+				root: Node::Branch(Edges::from([(
+					"something".into(),
+					Node::Leaf("LICENSE/something".into()),
+				)])),
 				work_dir: "test".into(),
-				statuses: hashmap! {},
+				statuses: Statuses::new(),
 			},
 			output: Tree {
-				root: Node::Branch(indexmap! {
-					"something".into() => Node::Leaf("LICENSE/something".into()),
-				}),
+				root: Node::Branch(Edges::from([(
+					"something".into(),
+					Node::Leaf("LICENSE/something".into()),
+				)])),
 				work_dir: "test".into(),
-				statuses: hashmap! {
-					"LICENSE/something".into() => Status::Obstructed,
-				},
+				statuses: Statuses::from([("LICENSE/something".into(), Status::Obstructed)]),
 			},
 		},
-	];
+	]);
 
 	for mut case in test_cases {
 		case.input.analyze()?;
@@ -386,100 +355,95 @@ fn link() -> Result<(), IoError> {
 		dirs_created: Vec<PathBuf>,
 	}
 
-	let test_cases = vec![
+	let test_cases = Vec::from([
 		Test {
 			description: "nothing to be done",
 			input: Tree {
-				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Leaf("tests/data/foo".into()),
-				}),
+				root: Node::Branch(Edges::from([(
+					"foo".into(),
+					Node::Leaf("tests/data/foo".into()),
+				)])),
 				work_dir: "fake_path".into(),
-				statuses: hashmap! {
-					"tests/data/foo".into() => Status::Done,
-				},
+				statuses: Statuses::from([("tests/data/foo".into(), Status::Done)]),
 			},
 			output: Ok(()),
-			files_created: vec![],
-			dirs_created: vec![],
+			files_created: Vec::new(),
+			dirs_created: Vec::new(),
 		},
 		Test {
 			description: "simple link",
 			input: Tree {
-				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Leaf("tests/data/foo".into()),
-				}),
+				root: Node::Branch(Edges::from([(
+					"foo".into(),
+					Node::Leaf("tests/data/foo".into()),
+				)])),
 				work_dir: "fake_path".into(),
-				statuses: hashmap! {
-					"tests/data/foo".into() => Status::Ready,
-				},
+				statuses: Statuses::from([("tests/data/foo".into(), Status::Ready)]),
 			},
 			output: Ok(()),
-			files_created: vec!["tests/data/foo".into()],
-			dirs_created: vec![],
+			files_created: Vec::from(["tests/data/foo".into()]),
+			dirs_created: Vec::new(),
 		},
 		Test {
 			description: "multiple links",
 			input: Tree {
-				root: Node::Branch(indexmap! {
-					"foo".into() => Node::Leaf("tests/data/foo".into()),
-					"bar".into() => Node::Leaf("tests/data/bar".into()),
-				}),
+				root: Node::Branch(Edges::from([
+					("foo".into(), Node::Leaf("tests/data/foo".into())),
+					("bar".into(), Node::Leaf("tests/data/bar".into())),
+				])),
 				work_dir: "fake_path".into(),
-				statuses: hashmap! {
-					"tests/data/foo".into() => Status::Ready,
-					"tests/data/bar".into() => Status::Ready,
-				},
+				statuses: Statuses::from([
+					("tests/data/foo".into(), Status::Ready),
+					("tests/data/bar".into(), Status::Ready),
+				]),
 			},
 			output: Ok(()),
-			files_created: vec!["tests/data/foo".into(), "tests/data/bar".into()],
-			dirs_created: vec![],
+			files_created: Vec::from(["tests/data/foo".into(), "tests/data/bar".into()]),
+			dirs_created: Vec::new(),
 		},
 		Test {
 			description: "bad link with conflict",
 			input: Tree {
-				root: Node::Branch(indexmap! {
-					"something".into() => Node::Leaf("tests/data/something".into())
-				}),
+				root: Node::Branch(Edges::from([(
+					"something".into(),
+					Node::Leaf("tests/data/something".into()),
+				)])),
 				work_dir: "fake_path".into(),
-				statuses: hashmap! {
-					"tests/data/something".into() => Status::Conflict,
-				},
+				statuses: Statuses::from([("tests/data/something".into(), Status::Conflict)]),
 			},
 			output: Err(Error::InternalError("tests/data/something".into())),
-			files_created: vec![],
-			dirs_created: vec![],
+			files_created: Vec::new(),
+			dirs_created: Vec::new(),
 		},
 		Test {
 			description: "bad link with obstruction",
 			input: Tree {
-				root: Node::Branch(indexmap! {
-					"something".into() => Node::Leaf("tests/data/something".into()),
-				}),
+				root: Node::Branch(Edges::from([(
+					"something".into(),
+					Node::Leaf("tests/data/something".into()),
+				)])),
 				work_dir: "fake_path".into(),
-				statuses: hashmap! {
-					"tests/data/something".into() => Status::Obstructed,
-				},
+				statuses: Statuses::from([("tests/data/something".into(), Status::Obstructed)]),
 			},
 			output: Err(Error::InternalError("tests/data/something".into())),
-			files_created: vec![],
-			dirs_created: vec![],
+			files_created: Vec::new(),
+			dirs_created: Vec::new(),
 		},
 		Test {
 			input: Tree {
-				root: Node::Branch(indexmap! {
-					"something".into() => Node::Leaf("tests/data/something".into())
-				}),
+				root: Node::Branch(Edges::from([(
+					"something".into(),
+					Node::Leaf("tests/data/something".into()),
+				)])),
 				work_dir: "fake_path".into(),
-				statuses: hashmap! {
-					"tests/data/something".into() => Status::Mismatch,
-				},
+				statuses: Statuses::from([("tests/data/something".into(), Status::Mismatch)]),
 			},
 			description: "bad link with mismatch",
 			output: Err(Error::InternalError("tests/data/something".into())),
-			files_created: vec![],
-			dirs_created: vec![],
+			files_created: Vec::new(),
+			dirs_created: Vec::new(),
 		},
-	];
+	]);
 
 	for case in test_cases {
 		let got = case.input.link();
@@ -525,30 +489,39 @@ fn link() -> Result<(), IoError> {
 #[test]
 fn format_tree() -> Result<(), IoError> {
 	let tree = Tree {
-		root: Node::Branch(indexmap! {
-			"foo".into() => Node::Branch(indexmap!{
-				"bar".into() => Node::Leaf("bar".into()),
-			}),
-			"baz".into() => Node::Branch(indexmap!{
-				"qux".into() => Node::Leaf("test/qux".into()),
-			}),
-			"quux".into() => Node::Branch(indexmap!{
-				"quuz".into() => Node::Leaf("quuz".into()),
-			}),
-			"corge".into() => Node::Branch(indexmap!{
-				"something".into() => Node::Leaf("tests/data/something".into()),
-				"gralt".into() => Node::Leaf("test/gralt".into()),
-				"anything".into() => Node::Leaf("file/anything".into()),
-			}),
-		}),
-		statuses: hashmap! {
-			"bar".into() => Status::Unknown,
-			"test/qux".into() => Status::Done,
-			"quuz".into() => Status::Ready,
-			"tests/data/something".into() => Status::Mismatch,
-			"test/gralt".into() => Status::Conflict,
-			"file/anything".into() => Status::Obstructed,
-		},
+		root: Node::Branch(Edges::from([
+			(
+				"foo".into(),
+				Node::Branch(Edges::from([("bar".into(), Node::Leaf("bar".into()))])),
+			),
+			(
+				"baz".into(),
+				Node::Branch(Edges::from([("qux".into(), Node::Leaf("test/qux".into()))])),
+			),
+			(
+				"quux".into(),
+				Node::Branch(Edges::from([("quuz".into(), Node::Leaf("quuz".into()))])),
+			),
+			(
+				"corge".into(),
+				Node::Branch(Edges::from([
+					(
+						"something".into(),
+						Node::Leaf("tests/data/something".into()),
+					),
+					("gralt".into(), Node::Leaf("test/gralt".into())),
+					("anything".into(), Node::Leaf("file/anything".into())),
+				])),
+			),
+		])),
+		statuses: Statuses::from([
+			("bar".into(), Status::Unknown),
+			("test/qux".into(), Status::Done),
+			("quuz".into(), Status::Ready),
+			("tests/data/something".into(), Status::Mismatch),
+			("test/gralt".into(), Status::Conflict),
+			("file/anything".into(), Status::Obstructed),
+		]),
 		work_dir: "test".into(),
 	};
 
@@ -563,16 +536,16 @@ fn format_tree() -> Result<(), IoError> {
 		format!(
 			indoc! {"
 					.                 {equals} {current_dir}
-					{t_bar}foo                                   
-					{straight_bar}{l_bar}bar       {arrow} {bar}                  {unknown}
 					{t_bar}baz                                   
 					{straight_bar}{l_bar}qux       {arrow} {test_qux}             {done}
-					{t_bar}quux                                  
-					{straight_bar}{l_bar}quuz      {arrow} {quuz}                 {ready}
-					{l_bar}corge                                 
-					{blank}{t_bar}something {arrow} {tests_data_something} {mismatch}
-					{blank}{t_bar}gralt     {arrow} {test_gralt}           {conflict}
-					{blank}{l_bar}anything  {arrow} {file_anything}        {obstructed}
+					{t_bar}corge                                 
+					{straight_bar}{t_bar}anything  {arrow} {file_anything}        {obstructed}
+					{straight_bar}{t_bar}gralt     {arrow} {test_gralt}           {conflict}
+					{straight_bar}{l_bar}something {arrow} {tests_data_something} {mismatch}
+					{t_bar}foo                                   
+					{straight_bar}{l_bar}bar       {arrow} {bar}                  {unknown}
+					{l_bar}quux                                  
+					{blank}{l_bar}quuz      {arrow} {quuz}                 {ready}
 				"},
 			t_bar = symbols_color.paint("├── "),
 			l_bar = symbols_color.paint("└── "),

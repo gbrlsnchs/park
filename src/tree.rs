@@ -9,7 +9,6 @@ use std::{
 };
 
 use ansi_term::Colour;
-use indexmap::IndexMap;
 use tabwriter::TabWriter;
 
 use crate::config::{Config, TagSet, Tags, Target};
@@ -19,7 +18,7 @@ use self::{
 	node::{
 		error::Error as NodeError,
 		iter::{Element as IterElement, NodeMetadata},
-		Node, Status,
+		Edges, Node, Status,
 	},
 };
 
@@ -48,7 +47,7 @@ impl<'a> Tree {
 		let work_dir = config.work_dir.unwrap_or(cwd);
 
 		let mut tree = Tree {
-			root: Node::Branch(IndexMap::new()),
+			root: Node::Branch(Edges::new()),
 			work_dir,
 			statuses: Statuses::new(),
 		};

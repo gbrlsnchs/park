@@ -1,11 +1,12 @@
 use std::{
-	collections::{HashMap, HashSet},
+	collections::{BTreeMap, HashSet},
 	path::PathBuf,
 };
 
 use serde::Deserialize;
 
-pub type TargetMap = HashMap<PathBuf, Target>;
+pub type TargetMap = BTreeMap<PathBuf, Target>;
+pub type TagSet = HashSet<String>;
 
 #[derive(Debug, Default, Deserialize, PartialEq)]
 /// The main configuration for Park.
@@ -16,8 +17,6 @@ pub struct Config {
 	pub targets: Option<TargetMap>,
 }
 
-pub type TagSet = HashSet<String>;
-
 #[derive(Debug, Default, Deserialize, PartialEq)]
 /// Represents configuration for a dotfile.
 pub struct Target {
@@ -27,15 +26,13 @@ pub struct Target {
 	pub tags: Option<Tags>,
 }
 
-pub type TagList = HashSet<String>;
-
 #[derive(Debug, Default, Deserialize, PartialEq)]
 /// Configuration for constraints that toggle certain dotfiles on and off.
 pub struct Tags {
 	/// These tags are evaluated conjunctively.
-	pub all_of: Option<TagList>,
+	pub all_of: Option<TagSet>,
 	/// These tags are evaluated disjunctively.
-	pub any_of: Option<TagList>,
+	pub any_of: Option<TagSet>,
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq)]
@@ -50,7 +47,6 @@ pub struct Link {
 #[cfg(test)]
 mod tests {
 	use indoc::indoc;
-	use maplit::{hashmap, hashset};
 	use pretty_assertions::assert_eq;
 
 	use super::*;
@@ -66,7 +62,12 @@ mod tests {
 		assert_eq!(
 			got,
 			Config {
-				tags: Some(hashset! {String::from("foo"), String::from("bar")}),
+				tags: Some({
+					let mut s = TagSet::new();
+					s.insert(String::from("foo"));
+					s.insert(String::from("bar"));
+					s
+				}),
 				base_dir: PathBuf::from("test"),
 				work_dir: None,
 				targets: None,
@@ -87,10 +88,15 @@ mod tests {
 		assert_eq!(
 			got,
 			Config {
-				tags: Some(hashset! {String::from("foo"), String::from("bar")}),
+				tags: Some({
+					let mut s = TagSet::new();
+					s.insert(String::from("foo"));
+					s.insert(String::from("bar"));
+					s
+				}),
 				base_dir: PathBuf::from("test"),
 				work_dir: Some(PathBuf::from("somewhere")),
-				targets: Some(hashmap! {}),
+				targets: Some(TargetMap::new()),
 			}
 		);
 	}
@@ -110,19 +116,30 @@ mod tests {
 		assert_eq!(
 			got,
 			Config {
-				tags: Some(hashset! {String::from("foo"), String::from("bar")}),
+				tags: Some({
+					let mut s = TagSet::new();
+					s.insert(String::from("foo"));
+					s.insert(String::from("bar"));
+					s
+				}),
 				base_dir: PathBuf::from("test"),
 				work_dir: None,
-				targets: Some(hashmap! {
-					PathBuf::from("baz") => Target{
-						link: None,
-						tags: None,
-					},
-					PathBuf::from("qux") => Target{
-						link: None,
-						tags: None,
-					},
-				}),
+				targets: Some(TargetMap::from([
+					(
+						PathBuf::from("baz"),
+						Target {
+							link: None,
+							tags: None,
+						},
+					),
+					(
+						PathBuf::from("qux"),
+						Target {
+							link: None,
+							tags: None,
+						},
+					),
+				])),
 			}
 		);
 	}
@@ -146,31 +163,42 @@ mod tests {
 		assert_eq!(
 			got,
 			Config {
-				tags: Some(hashset! {String::from("foo"), String::from("bar")}),
+				tags: Some({
+					let mut s = TagSet::new();
+					s.insert(String::from("foo"));
+					s.insert(String::from("bar"));
+					s
+				}),
 				base_dir: PathBuf::from("test"),
 				work_dir: None,
-				targets: Some(hashmap! {
-					PathBuf::from("baz") => Target{
-						link: Some(Link{
-							name: Some(PathBuf::from("BAZ")),
-							base_dir: None,
-						}),
-						tags: Some(Tags{
-							all_of: Some(hashset!{String::from("baz")}),
-							any_of: None,
-						}),
-					},
-					PathBuf::from("qux") => Target{
-						link: Some(Link{
-							name: None,
-							base_dir: Some(PathBuf::from("elsewhere")),
-						}),
-						tags: Some(Tags{
-							all_of: None,
-							any_of: Some(hashset!{String::from("qux")}),
-						}),
-					},
-				}),
+				targets: Some(TargetMap::from([
+					(
+						PathBuf::from("baz"),
+						Target {
+							link: Some(Link {
+								name: Some(PathBuf::from("BAZ")),
+								base_dir: None,
+							}),
+							tags: Some(Tags {
+								all_of: Some(TagSet::from(["baz".into()])),
+								any_of: None,
+							}),
+						},
+					),
+					(
+						PathBuf::from("qux"),
+						Target {
+							link: Some(Link {
+								name: None,
+								base_dir: Some(PathBuf::from("elsewhere")),
+							}),
+							tags: Some(Tags {
+								all_of: None,
+								any_of: Some(TagSet::from(["qux".into()])),
+							}),
+						},
+					),
+				])),
 			}
 		);
 	}

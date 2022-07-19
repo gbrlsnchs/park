@@ -7,7 +7,6 @@ edition = "2018"
 [dependencies]
 ansi_term = "=0.12.1"
 clap = { version = "=3.2.5", default-features = false, features = ["derive", "suggestions"] }
-indexmap = "=1.8.0"
 serde = { version = "=1.0.133", features = ["derive"] }
 tabwriter = { version = "=1.2.1", features = ["ansi_formatting"] }
 thiserror = "=1.0.26"
@@ -15,7 +14,6 @@ toml = "=0.5.8"
 
 [dev-dependencies]
 indoc = "=1.0.3"
-maplit = "=1.0.2"
 pretty_assertions = "=0.7.2"
 
 [build-dependencies]
