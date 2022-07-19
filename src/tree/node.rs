@@ -7,7 +7,7 @@ use indexmap::IndexMap;
 
 use self::error::Error;
 
-use self::iter::{Algorithm, Element, Iter, SearchAlgorithm};
+use self::iter::{Element, Iter};
 
 pub mod error;
 pub mod iter;
@@ -97,7 +97,7 @@ impl Node {
 
 impl<'a> IntoIterator for &'a Node {
 	type Item = Element;
-	type IntoIter = Iter<'a, { Algorithm::DepthFirstSearch as SearchAlgorithm }>;
+	type IntoIter = Iter<'a>;
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.into()

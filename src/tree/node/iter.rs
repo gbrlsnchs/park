@@ -5,15 +5,6 @@ use super::Node;
 #[cfg(test)]
 mod tests;
 
-pub type SearchAlgorithm = usize;
-
-/// Algorithm for iterating over nodes. In case any other possibility arrives, or even as an example
-/// code for different implementations based on const generics.
-pub enum Algorithm {
-	/// Regular depth-first search algorithm.
-	DepthFirstSearch = 0,
-}
-
 /// Some metadata for a node inside a tree.
 #[derive(Debug, PartialEq)]
 pub struct NodeMetadata {
@@ -31,13 +22,13 @@ pub struct Element {
 	pub link_path: Option<PathBuf>,
 }
 
-/// Iterator that visits nodes following depth-first search order.
-pub struct Iter<'a, const ALGORITHM: SearchAlgorithm> {
+/// Iterator that visits nodes using preorder traversal.
+pub struct Iter<'a> {
 	stack: Vec<State<'a>>,
 	path_stack: Vec<&'a Path>,
 }
 
-impl<'a> From<&'a Node> for Iter<'a, { Algorithm::DepthFirstSearch as SearchAlgorithm }> {
+impl<'a> From<&'a Node> for Iter<'a> {
 	fn from(root: &'a Node) -> Self {
 		Iter {
 			stack: vec![State {
@@ -53,7 +44,7 @@ impl<'a> From<&'a Node> for Iter<'a, { Algorithm::DepthFirstSearch as SearchAlgo
 	}
 }
 
-impl<'a> Iterator for Iter<'a, { Algorithm::DepthFirstSearch as SearchAlgorithm }> {
+impl<'a> Iterator for Iter<'a> {
 	type Item = Element;
 
 	fn next(&mut self) -> Option<Self::Item> {
