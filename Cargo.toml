@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 ansi_term = "=0.12.1"
-clap = { version = "=3.0.5", features = ["derive"] }
+clap = { version = "=3.2.5", default-features = false, features = ["derive", "suggestions"] }
 indexmap = "=1.8.0"
 serde = { version = "=1.0.133", features = ["derive"] }
 tabwriter = { version = "=1.2.1", features = ["ansi_formatting"] }
@@ -19,5 +19,5 @@ maplit = "=1.0.2"
 pretty_assertions = "=0.7.2"
 
 [build-dependencies]
-clap = { version = "=3.0.5", features = ["derive"] }
-clap_complete = "=3.0.4"
+clap = { version = "=3.2.5", default-features = false, features = ["derive", "suggestions"] }
+clap_complete = "=3.2.3"
