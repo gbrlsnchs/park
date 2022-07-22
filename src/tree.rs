@@ -7,12 +7,6 @@ use self::{
 	node::{error::Error as NodeError, iter::Element as IterElement, Edges, Node, Status},
 };
 
-mod error;
-pub mod node;
-
-#[cfg(test)]
-mod tests;
-
 pub type Statuses = HashMap<PathBuf, Status>;
 
 /// Structure representing all dotfiles after reading a configuration for Park.

@@ -2,7 +2,7 @@ use std::io::Write;
 use std::result::Result as StdResult;
 use std::{env, error::Error};
 
-use crate::{cli::Args, config::Config, printer::Printer, tree::Tree};
+use crate::{cli::Args, config::Config, parser::tree::Tree, printer::Printer};
 
 pub type Result = StdResult<(), Box<dyn Error>>;
 

@@ -7,12 +7,10 @@ use std::{
 use ansi_term::{Colour, Style};
 use tabwriter::TabWriter;
 
-use crate::tree::{
-	node::{
-		iter::{Element as IterElement, NodeMetadata},
-		Status,
-	},
-	Tree,
+use crate::parser::{
+	iter::{Element as IterElement, NodeMetadata},
+	node::Status,
+	tree::Tree,
 };
 
 pub struct Printer<'a> {
@@ -150,9 +148,9 @@ mod tests {
 
 	use indoc::indoc;
 
-	use crate::tree::{
+	use crate::parser::{
 		node::{Edges, Node},
-		Statuses,
+		tree::Statuses,
 	};
 
 	use super::*;

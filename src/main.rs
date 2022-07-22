@@ -7,9 +7,9 @@ use run::Result as RunResult;
 
 mod cli;
 mod config;
+mod parser;
 mod printer;
 mod run;
-mod tree;
 
 // TODO: Test CLI interactions.
 fn main() -> RunResult {
