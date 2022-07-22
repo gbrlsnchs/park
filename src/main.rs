@@ -7,6 +7,7 @@ use run::Result as RunResult;
 
 mod cli;
 mod config;
+mod printer;
 mod run;
 mod tree;
 

@@ -1,6 +1,5 @@
 use std::{fs, path::PathBuf};
 
-use indoc::indoc;
 use pretty_assertions::assert_eq;
 
 use crate::{
@@ -482,92 +481,6 @@ fn link() -> Result<(), IoError> {
 
 		assert_eq!(got, case.output, "bad result for {:?}", case.description);
 	}
-
-	Ok(())
-}
-
-#[test]
-fn format_tree() -> Result<(), IoError> {
-	let tree = Tree {
-		root: Node::Branch(Edges::from([
-			(
-				"foo".into(),
-				Node::Branch(Edges::from([("bar".into(), Node::Leaf("bar".into()))])),
-			),
-			(
-				"baz".into(),
-				Node::Branch(Edges::from([("qux".into(), Node::Leaf("test/qux".into()))])),
-			),
-			(
-				"quux".into(),
-				Node::Branch(Edges::from([("quuz".into(), Node::Leaf("quuz".into()))])),
-			),
-			(
-				"corge".into(),
-				Node::Branch(Edges::from([
-					(
-						"something".into(),
-						Node::Leaf("tests/data/something".into()),
-					),
-					("gralt".into(), Node::Leaf("test/gralt".into())),
-					("anything".into(), Node::Leaf("file/anything".into())),
-				])),
-			),
-		])),
-		statuses: Statuses::from([
-			("bar".into(), Status::Unknown),
-			("test/qux".into(), Status::Done),
-			("quuz".into(), Status::Ready),
-			("tests/data/something".into(), Status::Mismatch),
-			("test/gralt".into(), Status::Conflict),
-			("file/anything".into(), Status::Obstructed),
-		]),
-		work_dir: "test".into(),
-	};
-
-	println!("\n{}", tree);
-
-	let link_color = Colour::Purple.normal();
-	let symbols_color = Colour::White.dimmed();
-
-	// TODO(gbrlsnchs): This can (and should) get better in the future. =)
-	assert_eq!(
-		tree.to_string(),
-		format!(
-			indoc! {"
-					.                 {equals} {current_dir}
-					{t_bar}baz                                   
-					{straight_bar}{l_bar}qux       {arrow} {test_qux}             {done}
-					{t_bar}corge                                 
-					{straight_bar}{t_bar}anything  {arrow} {file_anything}        {obstructed}
-					{straight_bar}{t_bar}gralt     {arrow} {test_gralt}           {conflict}
-					{straight_bar}{l_bar}something {arrow} {tests_data_something} {mismatch}
-					{t_bar}foo                                   
-					{straight_bar}{l_bar}bar       {arrow} {bar}                  {unknown}
-					{l_bar}quux                                  
-					{blank}{l_bar}quuz      {arrow} {quuz}                 {ready}
-				"},
-			t_bar = symbols_color.paint("├── "),
-			l_bar = symbols_color.paint("└── "),
-			straight_bar = symbols_color.paint("│   "),
-			blank = symbols_color.paint("    "),
-			equals = symbols_color.paint(":="),
-			arrow = symbols_color.paint("<-"),
-			current_dir = Colour::Cyan.paint("test"),
-			bar = link_color.paint("bar"),
-			test_qux = link_color.paint("test/qux"),
-			quuz = link_color.paint("quuz"),
-			tests_data_something = link_color.paint("tests/data/something"),
-			test_gralt = link_color.paint("test/gralt"),
-			file_anything = link_color.paint("file/anything"),
-			unknown = Colour::White.dimmed().bold().paint("(UNKNOWN)"),
-			done = Colour::Blue.bold().paint("(DONE)"),
-			ready = Colour::Green.bold().paint("(READY)"),
-			mismatch = Colour::Yellow.bold().paint("(MISMATCH)"),
-			conflict = Colour::Red.bold().paint("(CONFLICT)"),
-			obstructed = Colour::Red.bold().paint("(OBSTRUCTED)"),
-		)
-	);
 
 	Ok(())
 }

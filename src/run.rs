@@ -1,10 +1,8 @@
-use std::error::Error;
 use std::io::Write;
 use std::result::Result as StdResult;
+use std::{env, error::Error};
 
-use crate::cli::Args;
-use crate::config::Config;
-use crate::tree::Tree;
+use crate::{cli::Args, config::Config, printer::Printer, tree::Tree};
 
 pub type Result = StdResult<(), Box<dyn Error>>;
 
@@ -25,7 +23,17 @@ pub fn run(input: &str, mut stdout: impl Write, args: Args) -> Result {
 	if link {
 		let _results = tree.link()?;
 	} else {
-		write!(stdout, "{}", tree)?;
+		write!(
+			stdout,
+			"{}",
+			Printer {
+				tree: &tree,
+				colored: match env::var("NO_COLOR") {
+					Ok(_) => false,
+					Err(_) => true,
+				}
+			}
+		)?;
 	}
 
 	Ok(())
@@ -88,39 +96,72 @@ mod tests {
 
 			[targets.bar]
 		"#};
-		let mut stdout = Vec::new();
 
-		run(
-			input,
-			&mut stdout,
-			Args {
-				filters: vec!["+foo".into()],
-				..Args::default()
-			},
-		)?;
+		{
+			let mut stdout = Vec::new();
 
-		let link_color = Colour::Purple.normal();
-		let symbols_color = Colour::White.dimmed();
-		let current_dir = env::current_dir().unwrap_or_default();
+			run(
+				&input,
+				&mut stdout,
+				Args {
+					filters: vec!["+foo".into()],
+					..Args::default()
+				},
+			)?;
 
-		assert_eq!(
-			String::from_utf8(stdout).unwrap(),
-			format!(
-				indoc! {"
-				.       {equals} {current_dir}
-				{t_bar}bar {arrow} {bar} {ready}
-				{l_bar}foo {arrow} {foo} {ready}
-			"},
-				t_bar = symbols_color.paint("├── "),
-				l_bar = symbols_color.paint("└── "),
-				equals = symbols_color.paint(":="),
-				arrow = symbols_color.paint("<-"),
-				current_dir = Colour::Cyan.paint(current_dir.to_string_lossy()),
-				foo = link_color.paint("tests/foo"),
-				bar = link_color.paint("tests/bar"),
-				ready = Colour::Green.bold().paint("(READY)"),
-			)
-		);
+			let link_color = Colour::Purple.normal();
+			let symbols_color = Colour::White.dimmed();
+			let current_dir = env::current_dir().unwrap_or_default();
+
+			assert_eq!(
+				String::from_utf8(stdout).unwrap(),
+				format!(
+					indoc! {"
+						.       {equals} {current_dir}
+						{t_bar}bar {arrow} {bar} {ready}
+						{l_bar}foo {arrow} {foo} {ready}
+					"},
+					t_bar = symbols_color.paint("├── "),
+					l_bar = symbols_color.paint("└── "),
+					equals = symbols_color.paint(":="),
+					arrow = symbols_color.paint("<-"),
+					current_dir = Colour::Cyan.paint(current_dir.to_string_lossy()),
+					foo = link_color.paint("tests/foo"),
+					bar = link_color.paint("tests/bar"),
+					ready = Colour::Green.bold().paint("(READY)"),
+				),
+				"invalid colored output",
+			);
+		}
+
+		{
+			let mut stdout = Vec::new();
+
+			env::set_var("NO_COLOR", "1");
+			run(
+				&input,
+				&mut stdout,
+				Args {
+					filters: vec!["+foo".into()],
+					..Args::default()
+				},
+			)?;
+
+			let current_dir = env::current_dir().unwrap_or_default();
+
+			assert_eq!(
+				String::from_utf8(stdout).unwrap(),
+				format!(
+					indoc! {"
+						.       := {current_dir}
+						├── bar <- tests/bar (READY)
+						└── foo <- tests/foo (READY)
+					"},
+					current_dir = current_dir.to_string_lossy(),
+				),
+				"invalid non-colored output",
+			);
+		}
 
 		Ok(())
 	}

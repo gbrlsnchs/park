@@ -1,29 +1,14 @@
-use std::{
-	collections::HashMap,
-	env,
-	fmt::{Display, Error as FmtError, Formatter, Result as FmtResult},
-	io::{Error as IoError, Write},
-	os::unix::fs,
-	path::PathBuf,
-	str,
-};
-
-use ansi_term::Colour;
-use tabwriter::TabWriter;
+use std::{collections::HashMap, env, io::Error as IoError, os::unix::fs, path::PathBuf};
 
 use crate::config::{Config, TagSet, Tags, Target};
 
 use self::{
 	error::Error,
-	node::{
-		error::Error as NodeError,
-		iter::{Element as IterElement, NodeMetadata},
-		Edges, Node, Status,
-	},
+	node::{error::Error as NodeError, iter::Element as IterElement, Edges, Node, Status},
 };
 
 mod error;
-mod node;
+pub mod node;
 
 #[cfg(test)]
 mod tests;
@@ -33,9 +18,9 @@ pub type Statuses = HashMap<PathBuf, Status>;
 /// Structure representing all dotfiles after reading a configuration for Park.
 #[derive(Debug, PartialEq)]
 pub struct Tree {
-	root: Node,
-	work_dir: PathBuf,
-	statuses: Statuses,
+	pub root: Node,
+	pub work_dir: PathBuf,
+	pub statuses: Statuses,
 }
 
 impl<'a> Tree {
@@ -211,103 +196,6 @@ impl<'a> Tree {
 			};
 
 			created_links.push(link_path);
-		}
-
-		Ok(())
-	}
-}
-
-impl<'a> Display for Tree {
-	fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-		let table = Vec::new();
-		let mut tab_writer = TabWriter::new(table).padding(1);
-
-		let mut indent_blocks = Vec::<bool>::new();
-
-		for IterElement {
-			metadata: NodeMetadata {
-				last_sibling: last_edge,
-				level,
-			},
-			target_path,
-			link_path,
-		} in &self.root
-		{
-			if level == 0 {
-				let cwd = Colour::Cyan.paint(self.work_dir.to_string_lossy());
-				if writeln!(
-					tab_writer,
-					".\t{} {}",
-					Colour::White.dimmed().paint(":="),
-					cwd,
-				)
-				.is_err()
-				{
-					return Err(FmtError);
-				}
-
-				continue;
-			}
-
-			while level <= indent_blocks.len() {
-				indent_blocks.pop();
-			}
-
-			indent_blocks.push(last_edge);
-
-			for (idx, has_indent_guide) in indent_blocks.iter().enumerate() {
-				let is_leaf = idx == level - 1;
-
-				let segment = match (has_indent_guide, is_leaf) {
-					(true, true) => "└── ",
-					(false, true) => "├── ",
-					(true, _) => "    ",
-					(false, _) => "│   ",
-				};
-
-				if write!(tab_writer, "{}", Colour::White.dimmed().paint(segment)).is_err() {
-					return Err(FmtError);
-				}
-			}
-
-			if let Some(link_path) = link_path {
-				let default_status = Status::Unknown;
-				let status = self.statuses.get(&link_path).unwrap_or(&default_status);
-
-				let status_style = match status {
-					Status::Unknown => Colour::White.dimmed(),
-					Status::Done => Colour::Blue.normal(),
-					Status::Ready => Colour::Green.normal(),
-					Status::Mismatch => Colour::Yellow.normal(),
-					Status::Conflict | Status::Obstructed => Colour::Red.normal(),
-				};
-				let status = format!("({:?})", status).to_uppercase();
-
-				if writeln!(
-					tab_writer,
-					"{target_path}\t{arrow} {link_path}\t{status}",
-					target_path = target_path.file_name().unwrap().to_string_lossy(),
-					arrow = Colour::White.dimmed().paint("<-"),
-					link_path = Colour::Purple.paint(link_path.to_string_lossy()),
-					status = status_style.bold().paint(status),
-				)
-				.is_err()
-				{
-					return Err(FmtError);
-				};
-			} else {
-				let path = target_path.file_name().unwrap();
-				if writeln!(tab_writer, "{}\t\t", path.to_string_lossy()).is_err() {
-					return Err(FmtError);
-				};
-			}
-		}
-
-		match tab_writer.into_inner() {
-			Err(_) => return Err(FmtError),
-			Ok(w) => {
-				write!(f, "{}", str::from_utf8(&w).unwrap())?;
-			}
 		}
 
 		Ok(())
