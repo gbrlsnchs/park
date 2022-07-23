@@ -12,7 +12,7 @@ pub type TagSet = HashSet<String>;
 /// The main configuration for Park.
 pub struct Config {
 	pub tags: Option<TagSet>,
-	pub base_dir: PathBuf,
+	pub base_dir: Option<PathBuf>,
 	pub work_dir: Option<PathBuf>,
 	pub targets: Option<TargetMap>,
 }
@@ -52,6 +52,13 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn deserialize_empty_config() {
+		let got: Config = toml::from_str("").unwrap();
+
+		assert_eq!(got, Config::default());
+	}
+
+	#[test]
 	fn deserialize_config_without_targets() {
 		let got: Config = toml::from_str(indoc! {r#"
 			tags = ["foo", "bar"]
@@ -62,13 +69,8 @@ mod tests {
 		assert_eq!(
 			got,
 			Config {
-				tags: Some({
-					let mut s = TagSet::new();
-					s.insert(String::from("foo"));
-					s.insert(String::from("bar"));
-					s
-				}),
-				base_dir: PathBuf::from("test"),
+				tags: Some(TagSet::from(["foo".into(), "bar".into(),])),
+				base_dir: Some("test".into()),
 				work_dir: None,
 				targets: None,
 			}
@@ -88,14 +90,9 @@ mod tests {
 		assert_eq!(
 			got,
 			Config {
-				tags: Some({
-					let mut s = TagSet::new();
-					s.insert(String::from("foo"));
-					s.insert(String::from("bar"));
-					s
-				}),
-				base_dir: PathBuf::from("test"),
-				work_dir: Some(PathBuf::from("somewhere")),
+				tags: Some(TagSet::from(["foo".into(), "bar".into()])),
+				base_dir: Some("test".into()),
+				work_dir: Some("somewhere".into()),
 				targets: Some(TargetMap::new()),
 			}
 		);
@@ -116,24 +113,19 @@ mod tests {
 		assert_eq!(
 			got,
 			Config {
-				tags: Some({
-					let mut s = TagSet::new();
-					s.insert(String::from("foo"));
-					s.insert(String::from("bar"));
-					s
-				}),
-				base_dir: PathBuf::from("test"),
+				tags: Some(TagSet::from(["foo".into(), "bar".into(),])),
+				base_dir: Some("test".into()),
 				work_dir: None,
 				targets: Some(TargetMap::from([
 					(
-						PathBuf::from("baz"),
+						"baz".into(),
 						Target {
 							link: None,
 							tags: None,
 						},
 					),
 					(
-						PathBuf::from("qux"),
+						"qux".into(),
 						Target {
 							link: None,
 							tags: None,
@@ -163,20 +155,15 @@ mod tests {
 		assert_eq!(
 			got,
 			Config {
-				tags: Some({
-					let mut s = TagSet::new();
-					s.insert(String::from("foo"));
-					s.insert(String::from("bar"));
-					s
-				}),
-				base_dir: PathBuf::from("test"),
+				tags: Some(TagSet::from(["foo".into(), "bar".into()])),
+				base_dir: Some("test".into()),
 				work_dir: None,
 				targets: Some(TargetMap::from([
 					(
-						PathBuf::from("baz"),
+						"baz".into(),
 						Target {
 							link: Some(Link {
-								name: Some(PathBuf::from("BAZ")),
+								name: Some("BAZ".into()),
 								base_dir: None,
 							}),
 							tags: Some(Tags {
@@ -186,11 +173,11 @@ mod tests {
 						},
 					),
 					(
-						PathBuf::from("qux"),
+						"qux".into(),
 						Target {
 							link: Some(Link {
 								name: None,
-								base_dir: Some(PathBuf::from("elsewhere")),
+								base_dir: Some("elsewhere".into()),
 							}),
 							tags: Some(Tags {
 								all_of: None,

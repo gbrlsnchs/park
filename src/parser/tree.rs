@@ -38,6 +38,8 @@ impl<'a> Tree {
 			..
 		} = config;
 
+		let default_base_dir = default_base_dir.unwrap_or_default();
+
 		if let Some(default_tags) = default_tags {
 			runtime_tags.extend(default_tags);
 		}
