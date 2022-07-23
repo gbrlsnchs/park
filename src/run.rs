@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::path::PathBuf;
 use std::result::Result as StdResult;
 use std::{env, error::Error};
 
@@ -11,12 +12,13 @@ pub fn run(input: &str, mut stdout: impl Write, args: Args) -> Result {
 	let config: Config = toml::from_str(input)?;
 	let Args { link, filters } = args;
 
-	let (tags, _targets): (Vec<String>, Vec<String>) =
+	let (tags, targets): (Vec<String>, Vec<String>) =
 		filters.into_iter().partition(|s| s.starts_with('+'));
 
 	let tags = tags.iter().map(|s| &s[1..]).map(|s| s.into()).collect();
+	let targets = targets.iter().map(PathBuf::from).collect();
 
-	let mut tree = Tree::parse(config, tags)?;
+	let mut tree = Tree::parse(config, (tags, targets))?;
 
 	tree.analyze()?;
 
@@ -161,6 +163,51 @@ mod tests {
 				current_dir = Colour::Cyan.paint(current_dir.to_string_lossy()),
 				foo = link_color.paint("tests/foo"),
 				bar = link_color.paint("tests/bar"),
+				ready = Colour::Green.bold().paint("(READY)"),
+			),
+			"invalid colored output",
+		);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_running_with_target_filters_as_args() -> Result {
+		let input = indoc! {r#"
+			base_dir = "tests"
+
+			[targets.foo]
+
+			[targets.bar]
+		"#};
+
+		let mut stdout = Vec::new();
+
+		run(
+			&input,
+			&mut stdout,
+			Args {
+				filters: vec!["foo".into()],
+				..Args::default()
+			},
+		)?;
+
+		let link_color = Colour::Purple.normal();
+		let symbols_color = Colour::White.dimmed();
+		let current_dir = env::current_dir().unwrap_or_default();
+
+		assert_eq!(
+			String::from_utf8(stdout).unwrap(),
+			format!(
+				indoc! {"
+						.       {equals} {current_dir}
+						{l_bar}foo {arrow} {foo} {ready}
+					"},
+				l_bar = symbols_color.paint("└── "),
+				equals = symbols_color.paint(":="),
+				arrow = symbols_color.paint("<-"),
+				current_dir = Colour::Cyan.paint(current_dir.to_string_lossy()),
+				foo = link_color.paint("tests/foo"),
 				ready = Colour::Green.bold().paint("(READY)"),
 			),
 			"invalid colored output",

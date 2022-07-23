@@ -1,4 +1,10 @@
-use std::{collections::HashMap, env, io::Error as IoError, os::unix::fs, path::PathBuf};
+use std::{
+	collections::{HashMap, HashSet},
+	env,
+	io::Error as IoError,
+	os::unix::fs,
+	path::PathBuf,
+};
 
 use crate::config::{Config, TagSet, Tags, Target};
 
@@ -20,7 +26,8 @@ pub struct Tree {
 
 impl<'a> Tree {
 	/// Parses a configuration and returns a tree based on it.
-	pub fn parse(config: Config, mut runtime_tags: TagSet) -> Result<Self, NodeError> {
+	pub fn parse(config: Config, filters: (TagSet, HashSet<PathBuf>)) -> Result<Self, NodeError> {
+		let (mut runtime_tags, target_filters) = filters;
 		let targets = config.targets.unwrap_or_default();
 
 		let cwd = env::current_dir().unwrap_or_default();
@@ -44,7 +51,11 @@ impl<'a> Tree {
 			runtime_tags.extend(default_tags);
 		}
 
-		'targets: for (ref target_path, target) in targets {
+		for (target_path, target) in targets {
+			if !target_filters.is_empty() && !target_filters.contains(&target_path) {
+				continue;
+			}
+
 			let Target {
 				link,
 				tags: target_tags,
@@ -55,21 +66,11 @@ impl<'a> Tree {
 			let Tags { all_of, any_of } = target_tags;
 			let (all_of, any_of) = (all_of.unwrap_or_default(), any_of.unwrap_or_default());
 
-			let mut allowed = true;
-			for tag in &all_of {
-				allowed = allowed && runtime_tags.contains(tag);
-
-				if !allowed {
-					continue 'targets;
-				}
+			if !all_of.is_empty() && !all_of.iter().all(|tag| runtime_tags.contains(tag)) {
+				continue;
 			}
 
-			// No disjunctive tags? Pass.
-			let mut allowed = any_of.is_empty();
-			for tag in &any_of {
-				allowed = allowed || runtime_tags.contains(tag);
-			}
-			if !allowed {
+			if !any_of.is_empty() && !any_of.iter().any(|tag| runtime_tags.contains(tag)) {
 				continue;
 			}
 
@@ -213,7 +214,7 @@ mod tests {
 	fn parse() -> Result<(), IoError> {
 		struct Test<'a> {
 			description: &'a str,
-			input: (Config, TagSet),
+			input: (Config, (TagSet, HashSet<PathBuf>)),
 			output: Result<Tree, NodeError>,
 		}
 
@@ -227,12 +228,12 @@ mod tests {
 						targets: Some(TargetMap::from([("foo".into(), Target::default())])),
 						..Config::default()
 					},
-					TagSet::new(),
+					(TagSet::from([]), HashSet::from([])),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
 				}),
 			},
 			Test {
@@ -242,7 +243,7 @@ mod tests {
 						targets: Some(TargetMap::from([("foo/bar".into(), Target::default())])),
 						..Config::default()
 					},
-					TagSet::new(),
+					(TagSet::from([]), HashSet::from([])),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([(
@@ -250,7 +251,7 @@ mod tests {
 						Node::Branch(Edges::from([("bar".into(), Node::Leaf("bar".into()))])),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
 				}),
 			},
 			Test {
@@ -269,7 +270,7 @@ mod tests {
 						)])),
 						..Config::default()
 					},
-					TagSet::new(),
+					(TagSet::from([]), HashSet::from([])),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([(
@@ -277,7 +278,7 @@ mod tests {
 						Node::Leaf("new_name".into()),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
 				}),
 			},
 			Test {
@@ -296,12 +297,15 @@ mod tests {
 						)])),
 						..Config::default()
 					},
-					TagSet::from(["foo".into(), "bar".into()]),
+					(
+						TagSet::from(["foo".into(), "bar".into()]),
+						HashSet::from([]),
+					),
 				),
 				output: Ok(Tree {
-					root: Node::Branch(Edges::new()),
+					root: Node::Branch(Edges::from([])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
 				}),
 			},
 			Test {
@@ -320,12 +324,12 @@ mod tests {
 						)])),
 						..Config::default()
 					},
-					TagSet::from(["test".into()]),
+					(TagSet::from(["test".into()]), HashSet::from([])),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
 				}),
 			},
 			Test {
@@ -344,12 +348,15 @@ mod tests {
 						)])),
 						..Config::default()
 					},
-					TagSet::from(["test".into(), "bar".into()]),
+					(
+						TagSet::from(["test".into(), "bar".into()]),
+						HashSet::from([]),
+					),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
 				}),
 			},
 			Test {
@@ -368,12 +375,12 @@ mod tests {
 						)])),
 						..Config::default()
 					},
-					TagSet::from(["test".into()]),
+					(TagSet::from(["test".into()]), HashSet::from([])),
 				),
 				output: Ok(Tree {
-					root: Node::Branch(Edges::new()),
+					root: Node::Branch(Edges::from([])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
 				}),
 			},
 			Test {
@@ -392,12 +399,12 @@ mod tests {
 						)])),
 						..Config::default()
 					},
-					TagSet::from(["test".into()]),
+					(TagSet::from(["test".into()]), HashSet::from([])),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
 				}),
 			},
 			Test {
@@ -407,7 +414,7 @@ mod tests {
 						targets: Some(TargetMap::from([("foo/bar/baz".into(), Target::default())])),
 						..Config::default()
 					},
-					TagSet::new(),
+					(TagSet::from([]), HashSet::from([])),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([(
@@ -418,7 +425,28 @@ mod tests {
 						)])),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
+				}),
+			},
+			Test {
+				description: "target enabled with target name filtering",
+				input: (
+					Config {
+						targets: Some(TargetMap::from([
+							("foo/bar".into(), Target::default()),
+							("baz/qux".into(), Target::default()),
+						])),
+						..Config::default()
+					},
+					(TagSet::from([]), HashSet::from(["foo/bar".into()])),
+				),
+				output: Ok(Tree {
+					root: Node::Branch(Edges::from([(
+						"foo".into(),
+						Node::Branch(Edges::from([("bar".into(), Node::Leaf("bar".into()))])),
+					)])),
+					work_dir: current_dir.into(),
+					statuses: Statuses::from([]),
 				}),
 			},
 		]);
@@ -448,7 +476,7 @@ mod tests {
 				input: Tree {
 					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
@@ -464,7 +492,7 @@ mod tests {
 						Node::Leaf("README.md".into()),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([(
@@ -483,7 +511,7 @@ mod tests {
 						Node::Leaf("tests/data/something".into()),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([(
@@ -502,7 +530,7 @@ mod tests {
 						Node::Leaf("tests/data/something".into()),
 					)])),
 					work_dir: "test".into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([(
@@ -521,7 +549,7 @@ mod tests {
 						Node::Leaf("LICENSE/something".into()),
 					)])),
 					work_dir: "test".into(),
-					statuses: Statuses::new(),
+					statuses: Statuses::from([]),
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([(
@@ -569,8 +597,8 @@ mod tests {
 					statuses: Statuses::from([("tests/data/foo".into(), Status::Done)]),
 				},
 				output: Ok(()),
-				files_created: Vec::new(),
-				dirs_created: Vec::new(),
+				files_created: Vec::from([]),
+				dirs_created: Vec::from([]),
 			},
 			Test {
 				description: "simple link",
@@ -584,7 +612,7 @@ mod tests {
 				},
 				output: Ok(()),
 				files_created: Vec::from(["tests/data/foo".into()]),
-				dirs_created: Vec::new(),
+				dirs_created: Vec::from([]),
 			},
 			Test {
 				description: "multiple links",
@@ -601,7 +629,7 @@ mod tests {
 				},
 				output: Ok(()),
 				files_created: Vec::from(["tests/data/foo".into(), "tests/data/bar".into()]),
-				dirs_created: Vec::new(),
+				dirs_created: Vec::from([]),
 			},
 			Test {
 				description: "bad link with conflict",
@@ -614,8 +642,8 @@ mod tests {
 					statuses: Statuses::from([("tests/data/something".into(), Status::Conflict)]),
 				},
 				output: Err(Error::InternalError("tests/data/something".into())),
-				files_created: Vec::new(),
-				dirs_created: Vec::new(),
+				files_created: Vec::from([]),
+				dirs_created: Vec::from([]),
 			},
 			Test {
 				description: "bad link with obstruction",
@@ -628,8 +656,8 @@ mod tests {
 					statuses: Statuses::from([("tests/data/something".into(), Status::Obstructed)]),
 				},
 				output: Err(Error::InternalError("tests/data/something".into())),
-				files_created: Vec::new(),
-				dirs_created: Vec::new(),
+				files_created: Vec::from([]),
+				dirs_created: Vec::from([]),
 			},
 			Test {
 				input: Tree {
@@ -642,16 +670,16 @@ mod tests {
 				},
 				description: "bad link with mismatch",
 				output: Err(Error::InternalError("tests/data/something".into())),
-				files_created: Vec::new(),
-				dirs_created: Vec::new(),
+				files_created: Vec::from([]),
+				dirs_created: Vec::from([]),
 			},
 		]);
 
 		for case in test_cases {
 			let got = case.input.link();
 
-			let mut file_assertions = Vec::new();
-			let mut dir_assertions = Vec::new();
+			let mut file_assertions = Vec::from([]);
+			let mut dir_assertions = Vec::from([]);
 			for file in &case.files_created {
 				let link_path = PathBuf::from("fake_path").join(file.file_name().unwrap());
 
