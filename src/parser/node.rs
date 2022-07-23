@@ -1,5 +1,4 @@
 use std::{
-	collections::BTreeMap,
 	ffi::OsStr,
 	path::{Path, PathBuf},
 };
@@ -35,8 +34,11 @@ pub enum Error {
 	EmptySegment,
 }
 
-/// Alias for a node's edges.
-pub type Edges = BTreeMap<PathBuf, Node>;
+/// A vector of edges.
+pub type Edges = Vec<Edge>;
+
+/// An edge holds both its path and its respective node.
+pub type Edge = (PathBuf, Node);
 
 /// Node for a recursive tree that holds symlink paths. It is either a branch or a leaf.
 #[derive(Debug, PartialEq)]
@@ -53,25 +55,29 @@ impl Node {
 			return Err(Error::EmptySegment);
 		}
 
+		// TODO: Handle error.
 		let (key, segments) = segments.unwrap();
 		let key = PathBuf::from(key);
 
 		match self {
-			Self::Branch(self_children) => {
-				let next = self_children.get_mut(&key);
+			Self::Branch(edges) => {
+				let current_slot = edges.iter_mut().find(|(path, _)| path == &key);
+				let is_leaf = segments.is_empty();
 
-				if segments.is_empty() {
-					if next.is_some() {
+				if is_leaf {
+					if current_slot.is_some() {
 						return Err(Error::LeafExists(key, link_path));
 					}
 
-					self_children.insert(key, Self::Leaf(link_path));
-				} else if let Some(branch_node) = next {
+					edges.push((key, Self::Leaf(link_path)));
+				} else if let Some(edge) = current_slot {
+					let (_, ref mut branch_node) = edge;
+
 					branch_node.add(segments.into(), link_path)?;
 				} else {
 					let mut branch_node = Self::Branch(Edges::new());
 					branch_node.add(segments.into(), link_path)?;
-					self_children.insert(key, branch_node);
+					edges.push((key, branch_node));
 				}
 				Ok(())
 			}
@@ -231,7 +237,7 @@ mod tests {
 				output: (Node::Branch(Edges::new()), Err(Error::EmptySegment)),
 			},
 			Test {
-				description: "add nodes to get sorted",
+				description: "nodes don't get sorted anymore",
 				input: (
 					Node::Branch(Edges::from([
 						("C".into(), Node::Leaf("1".into())),
@@ -244,11 +250,11 @@ mod tests {
 				),
 				output: (
 					Node::Branch(Edges::from([
-						("A".into(), Node::Leaf("4".into())),
-						("B".into(), Node::Leaf("3".into())),
 						("C".into(), Node::Leaf("1".into())),
-						("E".into(), Node::Leaf("5".into())),
 						("Z".into(), Node::Leaf("2".into())),
+						("B".into(), Node::Leaf("3".into())),
+						("A".into(), Node::Leaf("4".into())),
+						("E".into(), Node::Leaf("5".into())),
 					])),
 					Ok(()),
 				),

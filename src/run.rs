@@ -54,34 +54,66 @@ mod tests {
 		let input = indoc! {r#"
 			base_dir = "tests"
 
-			[targets.foo]
-			tags.all_of = ["foo"]
+			[targets.0xDEADBABE]
+			tags.all_of = ["0xDEADBABE"]
 
-			[targets.bar]
+			[targets.0xDEADBEEF]
 		"#};
 		let mut stdout = Vec::new();
 
 		run(input, &mut stdout, Args::default())?;
 
-		let link_color = Colour::Purple.normal();
-		let symbols_color = Colour::White.dimmed();
-		let current_dir = env::current_dir().unwrap_or_default();
+		{
+			let link_color = Colour::Purple.normal();
+			let symbols_color = Colour::White.dimmed();
+			let current_dir = env::current_dir().unwrap_or_default();
 
-		assert_eq!(
-			String::from_utf8(stdout).unwrap(),
-			format!(
-				indoc! {"
-				.       {equals} {current_dir}
-				{l_bar}bar {arrow} {bar} {ready}
-			"},
-				l_bar = symbols_color.paint("└── "),
-				equals = symbols_color.paint(":="),
-				arrow = symbols_color.paint("<-"),
-				current_dir = Colour::Cyan.paint(current_dir.to_string_lossy()),
-				bar = link_color.paint("tests/bar"),
-				ready = Colour::Green.bold().paint("(READY)"),
-			)
-		);
+			assert_eq!(
+				String::from_utf8(stdout).unwrap(),
+				format!(
+					indoc! {"
+						.              {equals} {current_dir}
+						{l_bar}0xDEADBEEF {arrow} {beef} {ready}
+					"},
+					l_bar = symbols_color.paint("└── "),
+					equals = symbols_color.paint(":="),
+					arrow = symbols_color.paint("<-"),
+					current_dir = Colour::Cyan.paint(current_dir.to_string_lossy()),
+					beef = link_color.paint("tests/0xDEADBEEF"),
+					ready = Colour::Green.bold().paint("(READY)"),
+				),
+				"with color",
+			);
+		}
+
+		{
+			let mut stdout = Vec::new();
+
+			env::set_var("NO_COLOR", "1");
+			run(
+				&input,
+				&mut stdout,
+				Args {
+					filters: vec!["+0xDEADBABE".into()],
+					..Args::default()
+				},
+			)?;
+
+			let current_dir = env::current_dir().unwrap_or_default();
+
+			assert_eq!(
+				String::from_utf8(stdout).unwrap(),
+				format!(
+					indoc! {"
+						.              := {current_dir}
+						├── 0xDEADBABE <- tests/0xDEADBABE (READY)
+						└── 0xDEADBEEF <- tests/0xDEADBEEF (READY)
+					"},
+					current_dir = current_dir.to_string_lossy(),
+				),
+				"without color",
+			);
+		}
 
 		Ok(())
 	}

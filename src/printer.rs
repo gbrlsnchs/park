@@ -160,27 +160,27 @@ mod tests {
 		let tree = Tree {
 			root: Node::Branch(Edges::from([
 				(
-					"foo".into(),
-					Node::Branch(Edges::from([("bar".into(), Node::Leaf("bar".into()))])),
-				),
-				(
 					"baz".into(),
 					Node::Branch(Edges::from([("qux".into(), Node::Leaf("test/qux".into()))])),
 				),
 				(
-					"quux".into(),
-					Node::Branch(Edges::from([("quuz".into(), Node::Leaf("quuz".into()))])),
-				),
-				(
 					"corge".into(),
 					Node::Branch(Edges::from([
+						("anything".into(), Node::Leaf("file/anything".into())),
+						("gralt".into(), Node::Leaf("test/gralt".into())),
 						(
 							"something".into(),
 							Node::Leaf("tests/data/something".into()),
 						),
-						("gralt".into(), Node::Leaf("test/gralt".into())),
-						("anything".into(), Node::Leaf("file/anything".into())),
 					])),
+				),
+				(
+					"foo".into(),
+					Node::Branch(Edges::from([("bar".into(), Node::Leaf("bar".into()))])),
+				),
+				(
+					"quux".into(),
+					Node::Branch(Edges::from([("quuz".into(), Node::Leaf("quuz".into()))])),
 				),
 			])),
 			statuses: Statuses::from([
