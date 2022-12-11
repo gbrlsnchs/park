@@ -102,7 +102,7 @@ impl<'a> Display for Printer<'a> {
 						Status::Unknown => Colour::White.dimmed(),
 						Status::Done => Colour::Blue.normal(),
 						Status::Ready => Colour::Green.normal(),
-						Status::Mismatch => Colour::Yellow.normal(),
+						Status::Mismatch | Status::Unparented => Colour::Yellow.normal(),
 						Status::Conflict | Status::Obstructed => Colour::Red.normal(),
 					}
 					.bold(),
@@ -147,6 +147,7 @@ mod tests {
 	use std::io::Error as IoError;
 
 	use indoc::indoc;
+	use pretty_assertions::assert_eq;
 
 	use crate::parser::{
 		node::{Edges, Node},
@@ -172,6 +173,10 @@ mod tests {
 							"something".into(),
 							Node::Leaf("tests/data/something".into()),
 						),
+						(
+							"s0m37h1ng".into(),
+							Node::Leaf("tests/none/s0m37h1ng".into()),
+						),
 					])),
 				),
 				(
@@ -188,6 +193,7 @@ mod tests {
 				("test/qux".into(), Status::Done),
 				("quuz".into(), Status::Ready),
 				("tests/data/something".into(), Status::Mismatch),
+				("tests/none/s0m37h1ng".into(), Status::Unparented),
 				("test/gralt".into(), Status::Conflict),
 				("file/anything".into(), Status::Obstructed),
 			]),
@@ -215,7 +221,8 @@ mod tests {
 					{t_bar}corge                                 
 					{straight_bar}{t_bar}anything  {arrow} {file_anything}        {obstructed}
 					{straight_bar}{t_bar}gralt     {arrow} {test_gralt}           {conflict}
-					{straight_bar}{l_bar}something {arrow} {tests_data_something} {mismatch}
+					{straight_bar}{t_bar}something {arrow} {tests_data_something} {mismatch}
+					{straight_bar}{l_bar}s0m37h1ng {arrow} {tests_none_something} {unparented}
 					{t_bar}foo                                   
 					{straight_bar}{l_bar}bar       {arrow} {bar}                  {unknown}
 					{l_bar}quux                                  
@@ -232,11 +239,13 @@ mod tests {
 					test_qux = link_color.paint("test/qux"),
 					quuz = link_color.paint("quuz"),
 					tests_data_something = link_color.paint("tests/data/something"),
+					tests_none_something = link_color.paint("tests/none/s0m37h1ng"),
 					test_gralt = link_color.paint("test/gralt"),
 					file_anything = link_color.paint("file/anything"),
 					unknown = Colour::White.dimmed().bold().paint("(UNKNOWN)"),
 					done = Colour::Blue.bold().paint("(DONE)"),
 					ready = Colour::Green.bold().paint("(READY)"),
+					unparented = Colour::Yellow.bold().paint("(UNPARENTED)"),
 					mismatch = Colour::Yellow.bold().paint("(MISMATCH)"),
 					conflict = Colour::Red.bold().paint("(CONFLICT)"),
 					obstructed = Colour::Red.bold().paint("(OBSTRUCTED)"),
@@ -262,7 +271,8 @@ mod tests {
 					├── corge                                 
 					│   ├── anything  <- file/anything        (OBSTRUCTED)
 					│   ├── gralt     <- test/gralt           (CONFLICT)
-					│   └── something <- tests/data/something (MISMATCH)
+					│   ├── something <- tests/data/something (MISMATCH)
+					│   └── s0m37h1ng <- tests/none/s0m37h1ng (UNPARENTED)
 					├── foo                                   
 					│   └── bar       <- bar                  (UNKNOWN)
 					└── quux                                  
