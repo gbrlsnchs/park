@@ -18,6 +18,8 @@ pub enum Status {
 	Done,
 	/// Link exists, but points to a different target.
 	Mismatch,
+	/// Target can be created but the parent directory will need to be created as well.
+	Unparented,
 	/// Another file already exists in the link path.
 	Conflict,
 	/// The file supposed to serve as the link directory is not a directory.

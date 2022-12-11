@@ -119,12 +119,16 @@ impl<'a> Tree {
 
 				if existing_target_path.is_err() {
 					let link_exists = link_path.exists();
+					let link_parent_exists =
+						link_path.parent().map_or(false, |parent| parent.exists());
 					statuses.insert(
 						link_path,
 						if link_exists {
 							Status::Conflict
-						} else {
+						} else if link_parent_exists {
 							Status::Ready
+						} else {
+							Status::Unparented
 						},
 					);
 
@@ -155,11 +159,10 @@ impl<'a> Tree {
 			.into_iter()
 			.filter(|IterElement { link_path, .. }| link_path.is_some()) // filters branches
 			.filter(|IterElement { link_path, .. }| {
-				if let Some(Status::Done) = self.statuses.get(link_path.as_ref().unwrap()) {
-					return false;
+				match self.statuses.get(link_path.as_ref().unwrap()) {
+					Some(Status::Done) => false,
+					_ => true,
 				}
-
-				true
 			})
 			.map(
 				|IterElement {
@@ -474,14 +477,39 @@ mod tests {
 			Test {
 				description: "single target should be ready",
 				input: Tree {
-					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
+					root: Node::Branch(Edges::from([(
+						"tests/foo".into(),
+						Node::Leaf("tests/foo".into()),
+					)])),
 					work_dir: current_dir.into(),
 					statuses: Statuses::from([]),
 				},
 				output: Tree {
-					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
+					root: Node::Branch(Edges::from([(
+						"tests/foo".into(),
+						Node::Leaf("tests/foo".into()),
+					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([("foo".into(), Status::Ready)]),
+					statuses: Statuses::from([("tests/foo".into(), Status::Ready)]),
+				},
+			},
+			Test {
+				description: "single target whose parent is nonexistent should be unparented",
+				input: Tree {
+					root: Node::Branch(Edges::from([(
+						"xxx/foo".into(),
+						Node::Leaf("xxx/foo".into()),
+					)])),
+					work_dir: current_dir.into(),
+					statuses: Statuses::from([]),
+				},
+				output: Tree {
+					root: Node::Branch(Edges::from([(
+						"xxx/foo".into(),
+						Node::Leaf("xxx/foo".into()),
+					)])),
+					work_dir: current_dir.into(),
+					statuses: Statuses::from([("xxx/foo".into(), Status::Unparented)]),
 				},
 			},
 			Test {
