@@ -1,8 +1,8 @@
 use std::{
 	collections::{HashMap, HashSet},
-	env,
+	env, fs,
 	io::Error as IoError,
-	os::unix::fs,
+	os::unix::fs as unix_fs,
 	path::PathBuf,
 };
 
@@ -179,6 +179,13 @@ impl<'a> Tree {
 							| Status::Mismatch
 							| Status::Conflict
 							| Status::Obstructed => return Err(Error::InternalError(link_path)),
+							Status::Unparented => {
+								if let Some(link_parent_dir) = link_path.parent() {
+									if let Err(err) = fs::create_dir_all(link_parent_dir) {
+										return Err(Error::IoError(err.kind()));
+									}
+								}
+							}
 							_ => {}
 						}
 
@@ -192,7 +199,7 @@ impl<'a> Tree {
 
 		let mut created_links = Vec::new();
 		for (target_path, link_path) in links? {
-			if let Err(err) = fs::symlink(target_path, &link_path) {
+			if let Err(err) = unix_fs::symlink(target_path, &link_path) {
 				return Err(Error::IoError(err.kind()));
 			};
 
@@ -516,19 +523,19 @@ mod tests {
 				description: "single target has conflict",
 				input: Tree {
 					root: Node::Branch(Edges::from([(
-						"README.md".into(),
-						Node::Leaf("README.md".into()),
+						"README.adoc".into(),
+						Node::Leaf("README.adoc".into()),
 					)])),
 					work_dir: current_dir.into(),
 					statuses: Statuses::from([]),
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([(
-						"README.md".into(),
-						Node::Leaf("README.md".into()),
+						"README.adoc".into(),
+						Node::Leaf("README.adoc".into()),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([("README.md".into(), Status::Conflict)]),
+					statuses: Statuses::from([("README.adoc".into(), Status::Conflict)]),
 				},
 			},
 			Test {
@@ -641,6 +648,20 @@ mod tests {
 				output: Ok(()),
 				files_created: Vec::from(["tests/data/foo".into()]),
 				dirs_created: Vec::from([]),
+			},
+			Test {
+				description: "simple unparented link",
+				input: Tree {
+					root: Node::Branch(Edges::from([(
+						"foo".into(),
+						Node::Leaf("tests/xxx/foo".into()),
+					)])),
+					work_dir: "fake_path".into(),
+					statuses: Statuses::from([("tests/xxx/foo".into(), Status::Unparented)]),
+				},
+				output: Ok(()),
+				files_created: Vec::from(["tests/xxx/foo".into()]),
+				dirs_created: Vec::from(["tests/xxx".into()]),
 			},
 			Test {
 				description: "multiple links",
