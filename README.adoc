@@ -7,7 +7,6 @@ understand your dotfiles structure.
 == Example
 This is a small extract adapted from my own dotfiles. The file below is named `configs.toml`:
 
-[source,toml]
 ----
 base_dir = "$XDG_CONFIG_HOME"
 tags = ["fontconfig"]
