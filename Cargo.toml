@@ -3,10 +3,11 @@ name = "park"
 version = "0.1.4"
 authors = ["Gabriel Sanches <gabriel@gsr.dev>"]
 edition = "2021"
+description = "Configuration-based dotfiles manager"
 
 [dependencies]
 ansi_term = "=0.12.1"
-clap = { version = "=3.2.5", default-features = false, features = ["derive", "std", "suggestions"] }
+clap = { version = "=4.0.29", default-features = false, features = ["derive", "help", "std", "suggestions", "usage"] }
 serde = { version = "=1.0.133", features = ["derive"] }
 tabwriter = { version = "=1.2.1", features = ["ansi_formatting"] }
 thiserror = "=1.0.26"
@@ -17,5 +18,5 @@ indoc = "=1.0.3"
 pretty_assertions = "=0.7.2"
 
 [build-dependencies]
-clap = { version = "=3.2.5", default-features = false, features = ["derive", "std", "suggestions"] }
-clap_complete = "=3.2.3"
+clap = { version = "=4.0.29", default-features = false, features = ["derive", "help", "std", "suggestions", "usage"] }
+clap_complete = "=4.0.6"

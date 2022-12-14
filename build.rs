@@ -2,7 +2,7 @@ use std::{fs, io::Error};
 
 use crate::cli::Args;
 
-use clap::IntoApp;
+use clap::CommandFactory;
 use clap_complete::{self, Shell};
 
 #[path = "src/cli.rs"]
@@ -13,7 +13,7 @@ fn main() -> Result<(), Error> {
 
 	fs::create_dir_all(completion_dir)?;
 
-	let mut app = Args::into_app();
+	let mut app = Args::command();
 	let app_name = app.get_name().to_string();
 
 	for shell in &[Shell::Bash, Shell::Zsh, Shell::Fish] {
