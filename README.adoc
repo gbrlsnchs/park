@@ -1,11 +1,13 @@
-= Park
+= park
 
-== About
-Park is a configuration-based dotfiles manager. It is able to organize dotfiles by symlinking
-them according to a configuration file written in TOML.
+A configuration-based dotfiles manager able to organize dotfiles by symlinking them according
+to a configuration file written in TOML.
 
-== Example
-This is a small extract adapted from my own dotfiles. The file below is named `configs.toml`:
+== Usage
+See `park(1)` for detailed information about the command.
+
+=== Example
+Consider the following configuration file named `config.toml`:
 
 ----
 base_dir = "$XDG_CONFIG_HOME"
@@ -25,8 +27,8 @@ link.name = ".zshrc"
 tags.all_of = ["wayland", "river"]
 ----
 
-Then, with the help of `envsubst`, we can feed Park's stdin with environment variables properly
-substituted:
+In order to substitute environment variables accordingly, let's use `envsubst` and send the
+output to park via stdin:
 
 ----
 $ envsubst < config.toml | park
@@ -50,7 +52,7 @@ So if all goes well, exit code is 0 and all necessary symlinks are created.
 If you pay enough attention to the output in the previous example, `river` was not
 evaluated. That's because it's guarded by two conjunctive tags (`wayland` and `river`), that is,
 both tags must be passed to the command so that the target gets evaluated. In order to do so,
-we need to pass those tags as arguments to Park:
+we need to pass those tags as arguments to park:
 
 ----
 $ envsubst < config.toml | park +wayland +river
@@ -64,7 +66,7 @@ $ envsubst < config.toml | park +wayland +river
 ----
 
 === Filtering by target name
-Note that, when using tags, you need to append them with a plus sign. Otherwise, Park would
+Note that, when using tags, you need to append them with a plus sign. Otherwise, park would
 consider arguments as _target names_, which are used for _filtering_. In the following example,
 only `fontconfig` will be evaluated, since its target name is passed as argument:
 
@@ -75,21 +77,7 @@ $ envsubst < config.toml | park fontconfig
 ----
 
 == Configuration
-The configuration consists of the following fields:
-
-- `base_dir` (string, required): Tells Park which base directory for symlinks
-- `work_dir` (string, optional): Tells Park which base directory to use for targets (your dotfiles),
-  defaults to current directory
-- `tags` (array of strings, optional): This denotes tags that will always be on while running Park
-- `targets` (object, optional): 
-	- `link` (object, optional):
-		- `base_dir` (string, optional): Base directory for the symlink to be created
-		- `name` (string, optional): Custom symlink name, defaults to the target basename
-	- `tags` (object, optional):
-		- `all_of` (array of strings, optional): Represents conjunctive tags and, if not empty, all
-		  tags in it need to be provided by the user in order for the target to be evaluated
-		- `any_of` (array of strings, optional): Represents disjunctive tags and, if not empty, at
-		  least one of its tags needs to be provided in order for the target to be evaluated
+See `park(5)`.
 
 == Building the project
 This project is built entirely in Rust, and makes no use of Cargo workspaces. Build it as you
