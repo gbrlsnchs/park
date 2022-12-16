@@ -119,8 +119,9 @@ impl<'a> Tree {
 
 				if existing_target_path.is_err() {
 					let link_exists = link_path.exists();
-					let link_parent_exists =
-						link_path.parent().map_or(false, |parent| parent.exists());
+					let link_parent_exists = link_path.parent().map_or(true, |parent| {
+						parent.as_os_str().is_empty() || parent.exists()
+					});
 					statuses.insert(
 						link_path,
 						if link_exists {
@@ -517,6 +518,19 @@ mod tests {
 					)])),
 					work_dir: current_dir.into(),
 					statuses: Statuses::from([("xxx/foo".into(), Status::Unparented)]),
+				},
+			},
+			Test {
+				description: "single target whose base directory is empty",
+				input: Tree {
+					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
+					work_dir: current_dir.into(),
+					statuses: Statuses::from([]),
+				},
+				output: Tree {
+					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
+					work_dir: current_dir.into(),
+					statuses: Statuses::from([("foo".into(), Status::Ready)]),
 				},
 			},
 			Test {
