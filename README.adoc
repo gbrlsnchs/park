@@ -84,5 +84,6 @@ This project is built entirely in Rust, and makes no use of Cargo workspaces. Bu
 wish for local usage, and package it to your distro of preference according to its policy on
 how to package software built in Rust.
 
-NOTE: This project generates shell completions for Bash, ZSH and Fish during build, which are
-available at `target/completions` after the build is complete.
+NOTE: `cargo build` generates shell completions for Bash, ZSH and Fish, which
+are available at `target/completions`, and manpages at `target/doc` (only when
+https://git.sr.ht/~sircmpwn/scdoc[`scdoc`] is available).

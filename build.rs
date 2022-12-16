@@ -29,6 +29,36 @@ fn main() -> Result<(), Error> {
 		clap_complete::generate_to(*shell, &mut app, &app_name, &completions_dir)?;
 	}
 
+	let doc_dir = target_dir.join("doc");
+	fs::create_dir_all(&doc_dir)?;
+
+	for doc in fs::read_dir("doc")? {
+		let doc = doc?;
+
+		let cmd = Command::new("scdoc")
+			.stdin(Stdio::piped())
+			.stdout(Stdio::piped())
+			.spawn();
+
+		if cmd.is_err() {
+			eprintln!("scdoc not found in PATH, skipping generating manpage templates from doc/");
+			return Ok(());
+		}
+
+		let mut cmd = cmd?;
+
+		if let Some(mut stdin) = cmd.stdin.take() {
+			let doc = fs::read(doc.path())?;
+			stdin.write_all(&doc)?;
+		}
+
+		let output = cmd.wait_with_output()?;
+		let doc = PathBuf::from(doc.file_name());
+		let doc = doc.file_stem().unwrap();
+
+		fs::write(doc_dir.join(doc), output.stdout)?;
+	}
+
 	let man = Man::new(app);
 	let mut buffer: Vec<u8> = Default::default();
 	man.render_title(&mut buffer)?;
@@ -49,38 +79,8 @@ Source code is located at <https://git.\&sr.\&ht/~gbrlsnchs/park>.\&"
 		.into();
 	buffer.append(&mut footer.into_bytes());
 
-	let doc_dir = target_dir.join("doc");
-	fs::create_dir_all(&doc_dir)?;
-
 	let manpage = PathBuf::from(format!("{}.1", app_name));
 	fs::write(PathBuf::from(&doc_dir).join(manpage), buffer)?;
-
-	for doc in fs::read_dir("doc")? {
-		let doc = doc?;
-
-		let cmd = Command::new("scdoc")
-			.stdin(Stdio::piped())
-			.stdout(Stdio::piped())
-			.spawn();
-
-		if cmd.is_err() {
-			eprintln!("scdoc not found in PATH, skipping generating manpage templates from doc/");
-			break;
-		}
-
-		let mut cmd = cmd?;
-
-		if let Some(mut stdin) = cmd.stdin.take() {
-			let doc = fs::read(doc.path())?;
-			stdin.write_all(&doc)?;
-		}
-
-		let output = cmd.wait_with_output()?;
-		let doc = PathBuf::from(doc.file_name());
-		let doc = doc.file_stem().unwrap();
-
-		fs::write(doc_dir.join(doc), output.stdout)?;
-	}
 
 	Ok(())
 }
