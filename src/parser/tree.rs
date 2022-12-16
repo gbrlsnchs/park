@@ -100,18 +100,20 @@ impl<'a> Tree {
 			..
 		} = self;
 
-		for IterElement {
+		'check: for IterElement {
 			link_path,
 			target_path,
 			..
 		} in root
 		{
 			if let Some(link_path) = link_path {
-				if let Some(parent_dir) = link_path.parent() {
-					if parent_dir.exists() && !parent_dir.is_dir() {
-						statuses.insert(link_path, Status::Obstructed);
+				if let Some(parent) = link_path.parent() {
+					for parent in parent.ancestors() {
+						if parent.exists() && !parent.is_dir() {
+							statuses.insert(link_path, Status::Obstructed);
 
-						continue;
+							continue 'check;
+						}
 					}
 				}
 
@@ -607,6 +609,28 @@ mod tests {
 					)])),
 					work_dir: "test".into(),
 					statuses: Statuses::from([("LICENSE/something".into(), Status::Obstructed)]),
+				},
+			},
+			Test {
+				description: "link with invalid parent path",
+				input: Tree {
+					root: Node::Branch(Edges::from([(
+						"something".into(),
+						Node::Leaf("LICENSE/foo/bar/something".into()),
+					)])),
+					work_dir: "test".into(),
+					statuses: Statuses::from([]),
+				},
+				output: Tree {
+					root: Node::Branch(Edges::from([(
+						"something".into(),
+						Node::Leaf("LICENSE/foo/bar/something".into()),
+					)])),
+					work_dir: "test".into(),
+					statuses: Statuses::from([(
+						"LICENSE/foo/bar/something".into(),
+						Status::Obstructed,
+					)]),
 				},
 			},
 		]);
