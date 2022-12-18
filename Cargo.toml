@@ -1,9 +1,8 @@
 [package]
 name = "park"
-version = "0.1.4"
-authors = ["Gabriel Sanches <gabriel@gsr.dev>"]
+version = "0.0.0"
 edition = "2021"
-description = "Configuration-based dotfiles manager"
+publish = false
 
 [workspace]
 members = ["wrkspc/park-cli"]

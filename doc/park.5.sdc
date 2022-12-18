@@ -90,23 +90,23 @@ The following fields are top-level fields.
 # TARGET STATUSES
 
 ## READY
-The target file is ready to be symlinked.
+The target file is ready to be symlinked
 
 ## DONE
-The target is already symlinked accordingly.
+The target is already symlinked accordingly
 
 ## UNPARENTED
 The target file is ready to be symlinked but its parent directory will be
-created by *park* during linking.
+created by *park* during linking
 
 ## MISMATCH
-A symlink exists, but it points to a different target file.
+A symlink exists, but it points to a different target file
 
 ## CONFLICT
-Another file already exists where the symlink would be created.
+Another file already exists where the symlink would be created
 
 ## OBSTRUCTED
-The parent path of the symlink is not a directory.
+The parent path of the symlink is not a directory
 
 # SEE ALSO
 
