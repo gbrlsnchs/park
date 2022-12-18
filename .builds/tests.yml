@@ -1,0 +1,8 @@
+image: alpine/edge
+packages:
+  - rust
+sources:
+  - https://git.sr.ht/~gbrlsnchs/park
+tasks:
+  - test: |
+      cargo test
