@@ -3,14 +3,16 @@ use std::path::PathBuf;
 use std::result::Result as StdResult;
 use std::{env, error::Error};
 
-use crate::{cli::Args, config::Config, parser::tree::Tree, printer::Printer};
+use park_cli::Park;
+
+use crate::{config::Config, parser::tree::Tree, printer::Printer};
 
 pub type Result = StdResult<(), Box<dyn Error>>;
 
 /// Runs the program, parsing STDIN for a config file.
-pub fn run(input: &str, mut stdout: impl Write, args: Args) -> Result {
+pub fn run(input: &str, mut stdout: impl Write, cli: Park) -> Result {
 	let config: Config = toml::from_str(input)?;
-	let Args { link, filters } = args;
+	let Park { link, filters } = cli;
 
 	let (tags, targets): (Vec<String>, Vec<String>) =
 		filters.into_iter().partition(|s| s.starts_with('+'));
@@ -65,7 +67,7 @@ mod tests {
 		{
 			let mut stdout = Vec::new();
 
-			run(input, &mut stdout, Args::default())?;
+			run(input, &mut stdout, Park::default())?;
 
 			let link_color = Colour::Purple.normal();
 			let symbols_color = Colour::White.dimmed();
@@ -96,9 +98,9 @@ mod tests {
 			run(
 				&input,
 				&mut stdout,
-				Args {
+				Park {
 					filters: vec!["+0xDEADBABE".into()],
-					..Args::default()
+					..Park::default()
 				},
 			)?;
 			env::remove_var("NO_COLOR");
@@ -138,9 +140,9 @@ mod tests {
 		run(
 			&input,
 			&mut stdout,
-			Args {
+			Park {
 				filters: vec!["+foo".into()],
-				..Args::default()
+				..Park::default()
 			},
 		)?;
 
@@ -186,9 +188,9 @@ mod tests {
 		run(
 			&input,
 			&mut stdout,
-			Args {
+			Park {
 				filters: vec!["foo".into()],
-				..Args::default()
+				..Park::default()
 			},
 		)?;
 
@@ -231,9 +233,9 @@ mod tests {
 		run(
 			input,
 			&mut stdout,
-			Args {
+			Park {
 				link: true,
-				..Args::default()
+				..Park::default()
 			},
 		)?;
 

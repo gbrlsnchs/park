@@ -1,0 +1,16 @@
+[package]
+name = "park_cli"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies.clap]
+version = "=4.0.29"
+default-features = false
+features = [
+	"derive",
+	"help",
+	"std",
+	"suggestions",
+	"usage",
+]

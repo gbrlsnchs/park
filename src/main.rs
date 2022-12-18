@@ -1,11 +1,10 @@
 use std::io::{self, Read};
 
-use clap::Parser;
+use park_cli::clap::Parser;
 
-use cli::Args;
+use park_cli::Park;
 use run::Result as RunResult;
 
-mod cli;
 mod config;
 mod parser;
 mod printer;
@@ -13,7 +12,7 @@ mod run;
 
 // TODO: Test CLI interactions.
 fn main() -> RunResult {
-	let args = Args::parse();
+	let args = Park::parse();
 
 	let mut input = String::new();
 

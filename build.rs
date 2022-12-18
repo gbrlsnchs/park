@@ -5,14 +5,11 @@ use std::{
 	process::{Command, Stdio},
 };
 
-use crate::cli::Args;
+use park_cli::Park;
 
-use clap::CommandFactory;
 use clap_complete::{self, Shell};
 use clap_mangen::Man;
-
-#[path = "src/cli.rs"]
-mod cli;
+use park_cli::clap::{Command as App, CommandFactory};
 
 fn main() -> Result<(), Error> {
 	println!("cargo:rerun-if-changed=doc");
@@ -22,7 +19,7 @@ fn main() -> Result<(), Error> {
 	let completions_dir = target_dir.join("completions");
 	fs::create_dir_all(&completions_dir)?;
 
-	let mut app = Args::command();
+	let mut app = Park::command();
 	let app_name = app.get_name().to_string();
 
 	for shell in &[Shell::Bash, Shell::Zsh, Shell::Fish] {

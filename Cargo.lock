@@ -134,15 +134,22 @@ name = "park"
 version = "0.1.4"
 dependencies = [
  "ansi_term",
- "clap",
  "clap_complete",
  "clap_mangen",
  "indoc",
+ "park_cli",
  "pretty_assertions",
  "serde",
  "tabwriter",
  "thiserror",
  "toml",
+]
+
+[[package]]
+name = "park_cli"
+version = "0.0.0"
+dependencies = [
+ "clap",
 ]
 
 [[package]]
