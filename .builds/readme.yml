@@ -10,12 +10,10 @@ secrets:
 tasks:
   - build: |
       cd park
-      asciidoctor --no-header-footer --out-file _body.html README.adoc
+      asciidoctor --no-header-footer --out-file README.html README.adoc
       sed --in-place '
         s|<div class="title">\(.*\)</div>|<div class="container"><pre>\1</pre></div>|g;
-        s|<td class="icon">|<td class="content">|g' _body.html
-      echo '<div id="header"><h1>park</h1></div>' > _header.html
-      cat _header.html _body.html > README.html
+        s|<td class="icon">|<td class="content">|g' README.html
   - update: |
       set +x
       cd park

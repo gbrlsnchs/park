@@ -1,12 +1,12 @@
-= park
+== park
 
 A configuration-based dotfiles manager able to organize dotfiles by symlinking them according
 to a configuration file written in TOML.
 
-== Usage
+=== Usage
 See `park(1)` for detailed information about the command.
 
-=== Example
+==== Example
 Consider the following configuration file named `config.toml`:
 
 ----
@@ -48,7 +48,7 @@ $ envsubst < config.toml | park --link
 
 So if all goes well, exit code is 0 and all necessary symlinks are created.
 
-=== Tags
+==== Tags
 If you pay enough attention to the output in the previous example, `river` was not
 evaluated. That's because it's guarded by two conjunctive tags (`wayland` and `river`), that is,
 both tags must be passed to the command so that the target gets evaluated. In order to do so,
@@ -65,7 +65,7 @@ $ envsubst < config.toml | park +wayland +river
         └── zshrc <- /home/you/.zshrc             (DONE)
 ----
 
-=== Filtering by target name
+==== Filtering by target name
 Note that, when using tags, you need to append them with a plus sign. Otherwise, park would
 consider arguments as _target names_, which are used for _filtering_. In the following example,
 only `fontconfig` will be evaluated, since its target name is passed as argument:
@@ -76,10 +76,10 @@ $ envsubst < config.toml | park fontconfig
 └── fontconfig    <- /home/you/.config/fontconfig (DONE)
 ----
 
-== Configuration
+=== Configuration
 See `park(5)`.
 
-== Building the project
+=== Building the project
 This project is built entirely in Rust, and makes no use of Cargo workspaces. Build it as you
 wish for local usage, and package it to your distro of preference according to its policy on
 how to package software built in Rust.
