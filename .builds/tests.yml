@@ -6,4 +6,5 @@ sources:
   - https://git.sr.ht/~gbrlsnchs/park
 tasks:
   - test: |
+      cd park
       cargo test
