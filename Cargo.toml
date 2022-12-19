@@ -9,6 +9,7 @@ members = ["wrkspc/park-cli"]
 
 [dependencies]
 ansi_term = "=0.12.1"
+anyhow = "=1.0.68"
 park_cli = { path = "wrkspc/park-cli" }
 serde = { version = "=1.0.133", features = ["derive"] }
 tabwriter = { version = "=1.2.1", features = ["ansi_formatting"] }

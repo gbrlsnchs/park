@@ -1,17 +1,17 @@
 use std::io::Write;
 use std::path::PathBuf;
-use std::result::Result as StdResult;
-use std::{env, error::Error};
 
+use std::env;
+
+use anyhow::{Context, Result};
 use park_cli::Park;
 
 use crate::{config::Config, parser::tree::Tree, printer::Printer};
 
-pub type Result = StdResult<(), Box<dyn Error>>;
-
 /// Runs the program, parsing STDIN for a config file.
-pub fn run(input: &str, mut stdout: impl Write, cli: Park) -> Result {
-	let config: Config = toml::from_str(input)?;
+pub fn run(input: &str, mut stdout: impl Write, cli: Park) -> Result<()> {
+	let config: Config =
+		toml::from_str(input).with_context(|| "could not read input configuration")?;
 	let Park { link, filters } = cli;
 
 	let (tags, targets): (Vec<String>, Vec<String>) =
@@ -20,24 +20,23 @@ pub fn run(input: &str, mut stdout: impl Write, cli: Park) -> Result {
 	let tags = tags.iter().map(|s| &s[1..]).map(|s| s.into()).collect();
 	let targets = targets.iter().map(PathBuf::from).collect();
 
-	let mut tree = Tree::parse(config, (tags, targets))?;
+	let mut tree =
+		Tree::parse(config, (tags, targets)).with_context(|| "could not parse target")?;
 
-	tree.analyze()?;
+	tree.analyze().with_context(|| "could not analyze target")?;
 
 	if link {
-		let _results = tree.link()?;
+		tree.link().with_context(|| "could not link target")?;
 	} else {
 		write!(
 			stdout,
 			"{}",
 			Printer {
 				tree: &tree,
-				colored: match env::var("NO_COLOR") {
-					Ok(_) => false,
-					Err(_) => true,
-				}
+				colored: env::var_os("NO_COLOR").is_none(),
 			}
-		)?;
+		)
+		.with_context(|| "could not print preview tree")?;
 	}
 
 	Ok(())
@@ -54,7 +53,7 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn test_running_without_args() -> Result {
+	fn test_running_without_args() -> Result<()> {
 		let input = indoc! {r#"
 			base_dir = "tests"
 
@@ -125,7 +124,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_running_with_tags_as_args() -> Result {
+	fn test_running_with_tags_as_args() -> Result<()> {
 		let input = indoc! {r#"
 			base_dir = "tests"
 
@@ -174,7 +173,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_running_with_target_filters_as_args() -> Result {
+	fn test_running_with_target_filters_as_args() -> Result<()> {
 		let input = indoc! {r#"
 			base_dir = "tests"
 
@@ -219,7 +218,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_linking() -> Result {
+	fn test_linking() -> Result<()> {
 		let input = indoc! {r#"
 			base_dir = "tests"
 

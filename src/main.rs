@@ -2,8 +2,8 @@ use std::io::{self, Read};
 
 use park_cli::clap::Parser;
 
+use anyhow::Result;
 use park_cli::Park;
-use run::Result as RunResult;
 
 mod config;
 mod parser;
@@ -11,7 +11,7 @@ mod printer;
 mod run;
 
 // TODO: Test CLI interactions.
-fn main() -> RunResult {
+fn main() -> Result<()> {
 	let args = Park::parse();
 
 	let mut input = String::new();
