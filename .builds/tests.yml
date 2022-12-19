@@ -1,5 +1,6 @@
 image: alpine/edge
 packages:
+  - cargo
   - rust
 sources:
   - https://git.sr.ht/~gbrlsnchs/park
