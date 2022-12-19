@@ -81,6 +81,7 @@ See `park(5)`.
 
 === Contributing
 mailto:~gbrlsnchs/park-dev@lists.sr.ht[Use the mailing list] to
+
 - report issues
 - request new features
 - send patches
