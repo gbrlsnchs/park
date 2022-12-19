@@ -66,12 +66,12 @@ $ envsubst < config.toml | park +wayland +river
 ----
 
 ==== Filtering by target name
-Note that, when using tags, you need to append them with a plus sign. Otherwise, park would
+Note that, when using tags, you need to prepend them with a plus sign. Otherwise, park would
 consider arguments as _target names_, which are used for _filtering_. In the following example,
 only `fontconfig` will be evaluated, since its target name is passed as argument:
 
 ----
-$ envsubst < config.toml | park fontconfig
+$ envsubst < config.toml | park +wayland +river fontconfig
 .                  root: ~/dotfiles
 └── fontconfig     ~/.config/fontconfig  (DONE)
 ----
@@ -79,10 +79,20 @@ $ envsubst < config.toml | park fontconfig
 === Configuration
 See `park(5)`.
 
-=== Building the project
-This project is built entirely in Rust, and makes no use of Cargo workspaces. Build it as you
-wish for local usage, and package it to your distro of preference according to its policy on
-how to package software built in Rust.
+=== Contributing
+mailto:~gbrlsnchs/park-dev@lists.sr.ht[Use the mailing list] to
+- report issues
+- request new features
+- send patches
+- discuss development in general
+
+If applicable, a new ticket will be submitted by maintainers to
+https://todo.sr.ht/~gbrlsnchs/park[the issue tracker] in order to track confirmed bugs or
+new features.
+
+=== Building and distributing the project
+This project is built entirely in Rust. Build it as you wish for local usage, and package it
+to your distro of preference in accordance with its policy on how to package Rust projects.
 
 NOTE: `cargo build` generates shell completions for Bash, ZSH and Fish, which
 are available at `target/completions`, and manpages at `target/doc` (only when
