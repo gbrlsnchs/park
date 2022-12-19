@@ -3,6 +3,8 @@
 A configuration-based dotfiles manager able to organize dotfiles by symlinking them according
 to a configuration file written in TOML.
 
+image:https://builds.sr.ht/~gbrlsnchs/park.svg[builds.sr.ht status,link=https://builds.sr.ht/~gbrlsnchs/park]
+
 === Usage
 See `park(1)` for detailed information about the command.
 
