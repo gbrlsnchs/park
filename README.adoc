@@ -74,8 +74,8 @@ only `fontconfig` will be evaluated, since its target name is passed as argument
 
 ----
 $ envsubst < config.toml | park +wayland +river fontconfig
-.                  root: ~/dotfiles
-└── fontconfig     ~/.config/fontconfig  (DONE)
+.               root: ~/dotfiles
+└── fontconfig  ~/.config/fontconfig  (DONE)
 ----
 
 === Configuration
