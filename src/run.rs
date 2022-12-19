@@ -46,7 +46,7 @@ pub fn run(input: &str, mut stdout: impl Write, cli: Park) -> Result<()> {
 mod tests {
 	use std::{env, fs, path::PathBuf, str};
 
-	use ansi_term::Colour;
+	use ansi_term::{Colour, Style};
 	use indoc::indoc;
 	use pretty_assertions::assert_eq;
 
@@ -68,23 +68,25 @@ mod tests {
 
 			run(input, &mut stdout, Park::default())?;
 
+			let target_color = Style::new().bold();
 			let link_color = Colour::Purple.normal();
-			let symbols_color = Colour::White.dimmed();
+			let symbols_color = Colour::White.normal();
 			let current_dir = env::current_dir().unwrap_or_default();
 
 			assert_eq!(
 				String::from_utf8(stdout).unwrap(),
 				format!(
 					indoc! {"
-						.              {equals} {current_dir}
-						{l_bar}0xDEADBEEF {arrow} {beef} {ready}
+						.               {current_dir}
+						{l_bar}{tgt}  {beef}  {ready}
 					"},
+					tgt = target_color.paint("0xDEADBEEF"),
 					l_bar = symbols_color.paint("└── "),
-					equals = symbols_color.paint(":="),
-					arrow = symbols_color.paint("<-"),
-					current_dir = Colour::Cyan.paint(current_dir.to_string_lossy()),
+					current_dir = Colour::White
+						.italic()
+						.paint(format!("root: {}", current_dir.to_string_lossy())),
 					beef = link_color.paint("tests/0xDEADBEEF"),
-					ready = Colour::Green.bold().paint("(READY)"),
+					ready = Colour::Green.normal().paint("(READY)"),
 				),
 				"with color",
 			);
@@ -110,9 +112,9 @@ mod tests {
 				String::from_utf8(stdout).unwrap(),
 				format!(
 					indoc! {"
-						.              := {current_dir}
-						├── 0xDEADBABE <- tests/0xDEADBABE (READY)
-						└── 0xDEADBEEF <- tests/0xDEADBEEF (READY)
+						.               root: {current_dir}
+						├── 0xDEADBABE  tests/0xDEADBABE  (READY)
+						└── 0xDEADBEEF  tests/0xDEADBEEF  (READY)
 					"},
 					current_dir = current_dir.to_string_lossy(),
 				),
@@ -145,26 +147,29 @@ mod tests {
 			},
 		)?;
 
+		let target_color = Style::new().bold();
 		let link_color = Colour::Purple.normal();
-		let symbols_color = Colour::White.dimmed();
+		let symbols_color = Colour::White.normal();
 		let current_dir = env::current_dir().unwrap_or_default();
 
 		assert_eq!(
 			String::from_utf8(stdout).unwrap(),
 			format!(
 				indoc! {"
-						.       {equals} {current_dir}
-						{t_bar}bar {arrow} {bar} {ready}
-						{l_bar}foo {arrow} {foo} {ready}
+						.        {current_dir}
+						{t_bar}{tgt1}  {bar}  {ready}
+						{l_bar}{tgt2}  {foo}  {ready}
 					"},
+				tgt1 = target_color.paint("bar"),
+				tgt2 = target_color.paint("foo"),
 				t_bar = symbols_color.paint("├── "),
 				l_bar = symbols_color.paint("└── "),
-				equals = symbols_color.paint(":="),
-				arrow = symbols_color.paint("<-"),
-				current_dir = Colour::Cyan.paint(current_dir.to_string_lossy()),
+				current_dir = Colour::White
+					.italic()
+					.paint(format!("root: {}", current_dir.to_string_lossy())),
 				foo = link_color.paint("tests/foo"),
 				bar = link_color.paint("tests/bar"),
-				ready = Colour::Green.bold().paint("(READY)"),
+				ready = Colour::Green.normal().paint("(READY)"),
 			),
 			"invalid colored output",
 		);
@@ -194,22 +199,24 @@ mod tests {
 		)?;
 
 		let link_color = Colour::Purple.normal();
-		let symbols_color = Colour::White.dimmed();
+		let target_color = Style::new().bold();
+		let symbols_color = Colour::White.normal();
 		let current_dir = env::current_dir().unwrap_or_default();
 
 		assert_eq!(
 			String::from_utf8(stdout).unwrap(),
 			format!(
 				indoc! {"
-						.       {equals} {current_dir}
-						{l_bar}foo {arrow} {foo} {ready}
+						.        {current_dir}
+						{l_bar}{tgt}  {foo}  {ready}
 					"},
 				l_bar = symbols_color.paint("└── "),
-				equals = symbols_color.paint(":="),
-				arrow = symbols_color.paint("<-"),
-				current_dir = Colour::Cyan.paint(current_dir.to_string_lossy()),
+				current_dir = Colour::White
+					.italic()
+					.paint(format!("root: {}", current_dir.to_string_lossy())),
+				tgt = target_color.paint("foo"),
 				foo = link_color.paint("tests/foo"),
-				ready = Colour::Green.bold().paint("(READY)"),
+				ready = Colour::Green.normal().paint("(READY)"),
 			),
 			"invalid colored output",
 		);

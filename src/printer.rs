@@ -1,4 +1,6 @@
 use std::{
+	env,
+	ffi::OsStr,
 	fmt::{Display, Error as FmtError, Formatter, Result as FmtResult},
 	io::Write,
 	str,
@@ -45,17 +47,11 @@ impl<'a> Display for Printer<'a> {
 		} in &self.tree.root
 		{
 			if level == 0 {
-				let cwd = self
-					.resolve_style(Colour::Cyan.normal())
-					.paint(self.tree.work_dir.to_string_lossy());
-				if writeln!(
-					tab_writer,
-					".\t{} {}",
-					self.resolve_style(Colour::White.dimmed()).paint(":="),
-					cwd,
-				)
-				.is_err()
-				{
+				let cwd = self.resolve_style(Colour::White.italic()).paint(format!(
+					"root: {}",
+					replace_home(self.tree.work_dir.to_string_lossy())
+				));
+				if writeln!(tab_writer, ".\t {}", cwd,).is_err() {
 					return Err(FmtError);
 				}
 
@@ -81,7 +77,7 @@ impl<'a> Display for Printer<'a> {
 				if write!(
 					tab_writer,
 					"{}",
-					self.resolve_style(Colour::White.dimmed()).paint(segment)
+					self.resolve_style(Colour::White.normal()).paint(segment)
 				)
 				.is_err()
 				{
@@ -99,24 +95,34 @@ impl<'a> Display for Printer<'a> {
 
 				let status_style = self.resolve_style(
 					match status {
-						Status::Unknown => Colour::White.dimmed(),
-						Status::Done => Colour::Blue.normal(),
-						Status::Ready => Colour::Green.normal(),
-						Status::Mismatch | Status::Unparented => Colour::Yellow.normal(),
-						Status::Conflict | Status::Obstructed => Colour::Red.normal(),
+						Status::Unknown => Colour::White,
+						Status::Done => Colour::Blue,
+						Status::Ready => Colour::Green,
+						Status::Mismatch | Status::Unparented => Colour::Yellow,
+						Status::Conflict | Status::Obstructed => Colour::Red,
 					}
-					.bold(),
+					.normal(),
 				);
 				let status = format!("({:?})", status).to_uppercase();
 
+				let target_segment: Vec<&OsStr> = target_path.iter().collect();
+				let is_leaf = level == target_segment.len();
+				let target_path = target_path.file_name().unwrap().to_string_lossy();
 				if writeln!(
 					tab_writer,
-					"{target_path}\t{arrow} {link_path}\t{status}",
-					target_path = target_path.file_name().unwrap().to_string_lossy(),
-					arrow = self.resolve_style(Colour::White.dimmed()).paint("<-"),
+					"{target_path}\t {link_path}\t {status}",
+					target_path = {
+						let mut style = Style::new();
+
+						if is_leaf {
+							style = style.bold();
+						}
+
+						self.resolve_style(style).paint(target_path)
+					},
 					link_path = self
 						.resolve_style(Colour::Purple.normal())
-						.paint(link_path.to_string_lossy()),
+						.paint(format!("{}", replace_home(link_path.to_string_lossy()))),
 					status = status_style.paint(status),
 				)
 				.is_err()
@@ -140,6 +146,17 @@ impl<'a> Display for Printer<'a> {
 
 		Ok(())
 	}
+}
+
+fn replace_home<S>(s: S) -> String
+where
+	S: AsRef<str>,
+{
+	if let Ok(home) = env::var("HOME") {
+		return s.as_ref().replacen(&home, "~", 1);
+	}
+
+	s.as_ref().into()
 }
 
 #[cfg(test)]
@@ -167,7 +184,7 @@ mod tests {
 				(
 					"corge".into(),
 					Node::Branch(Edges::from([
-						("anything".into(), Node::Leaf("file/anything".into())),
+						("anything".into(), Node::Leaf("file/file".into())),
 						("gralt".into(), Node::Leaf("test/gralt".into())),
 						(
 							"something".into(),
@@ -195,10 +212,12 @@ mod tests {
 				("tests/data/something".into(), Status::Mismatch),
 				("tests/none/s0m37h1ng".into(), Status::Unparented),
 				("test/gralt".into(), Status::Conflict),
-				("file/anything".into(), Status::Obstructed),
+				("file/file".into(), Status::Obstructed),
 			]),
 			work_dir: "test".into(),
 		};
+
+		env::set_var("HOME", "file");
 
 		{
 			let printer = Printer {
@@ -208,47 +227,53 @@ mod tests {
 
 			println!("\n{}", printer);
 
+			let target_color = Style::new().bold();
 			let link_color = Colour::Purple.normal();
-			let symbols_color = Colour::White.dimmed();
+			let symbols_color = Colour::White.normal();
 
 			assert_eq!(
 				printer.to_string(),
 				format!(
 					indoc! {"
-					.                 {equals} {current_dir}
-					{t_bar}baz                                   
-					{straight_bar}{l_bar}qux       {arrow} {test_qux}             {done}
-					{t_bar}corge                                 
-					{straight_bar}{t_bar}anything  {arrow} {file_anything}        {obstructed}
-					{straight_bar}{t_bar}gralt     {arrow} {test_gralt}           {conflict}
-					{straight_bar}{t_bar}something {arrow} {tests_data_something} {mismatch}
-					{straight_bar}{l_bar}s0m37h1ng {arrow} {tests_none_something} {unparented}
-					{t_bar}foo                                   
-					{straight_bar}{l_bar}bar       {arrow} {bar}                  {unknown}
-					{l_bar}quux                                  
-					{blank}{l_bar}quuz      {arrow} {quuz}                 {ready}
+					.                  {current_dir}
+					{t_bar}baz                                 
+					{straight_bar}{l_bar}{tgt1}        {test_qux}              {done}
+					{t_bar}corge                               
+					{straight_bar}{t_bar}{tgt2}   {file_file}                {obstructed}
+					{straight_bar}{t_bar}{tgt3}      {test_gralt}            {conflict}
+					{straight_bar}{t_bar}{tgt4}  {tests_data_something}  {mismatch}
+					{straight_bar}{l_bar}{tgt5}  {tests_none_something}  {unparented}
+					{t_bar}foo                                 
+					{straight_bar}{l_bar}{tgt6}        {bar}                   {unknown}
+					{l_bar}quux                                
+					{blank}{l_bar}{tgt7}       {quuz}                  {ready}
 				"},
 					t_bar = symbols_color.paint("├── "),
 					l_bar = symbols_color.paint("└── "),
+					tgt1 = target_color.paint("qux"),
+					tgt2 = target_color.paint("anything"),
+					tgt3 = target_color.paint("gralt"),
+					tgt4 = target_color.paint("something"),
+					tgt5 = target_color.paint("s0m37h1ng"),
+					tgt6 = target_color.paint("bar"),
+					tgt7 = target_color.paint("quuz"),
 					straight_bar = symbols_color.paint("│   "),
 					blank = symbols_color.paint("    "),
-					equals = symbols_color.paint(":="),
-					arrow = symbols_color.paint("<-"),
-					current_dir = Colour::Cyan.paint("test"),
+					current_dir = Colour::White.italic().paint("root: test"),
 					bar = link_color.paint("bar"),
 					test_qux = link_color.paint("test/qux"),
 					quuz = link_color.paint("quuz"),
 					tests_data_something = link_color.paint("tests/data/something"),
 					tests_none_something = link_color.paint("tests/none/s0m37h1ng"),
 					test_gralt = link_color.paint("test/gralt"),
-					file_anything = link_color.paint("file/anything"),
-					unknown = Colour::White.dimmed().bold().paint("(UNKNOWN)"),
-					done = Colour::Blue.bold().paint("(DONE)"),
-					ready = Colour::Green.bold().paint("(READY)"),
-					unparented = Colour::Yellow.bold().paint("(UNPARENTED)"),
-					mismatch = Colour::Yellow.bold().paint("(MISMATCH)"),
-					conflict = Colour::Red.bold().paint("(CONFLICT)"),
-					obstructed = Colour::Red.bold().paint("(OBSTRUCTED)"),
+					file_file = link_color.paint("~/file"),
+					unknown = Colour::White.normal().paint("(UNKNOWN)"),
+					done = Colour::Blue.normal().paint("(DONE)"),
+					ready = Colour::Green.normal().paint("(READY)"),
+					unparented = Colour::Yellow.normal().paint("(UNPARENTED)"),
+					mismatch = Colour::Yellow.normal().paint("(MISMATCH)"),
+					conflict = Colour::Red.normal().paint("(CONFLICT)"),
+					obstructed = Colour::Red.normal().paint("(OBSTRUCTED)"),
 				),
 				"invalid colored output",
 			);
@@ -265,18 +290,18 @@ mod tests {
 			assert_eq!(
 				printer.to_string(),
 				format!(indoc! {"
-					.                 := test
-					├── baz                                   
-					│   └── qux       <- test/qux             (DONE)
-					├── corge                                 
-					│   ├── anything  <- file/anything        (OBSTRUCTED)
-					│   ├── gralt     <- test/gralt           (CONFLICT)
-					│   ├── something <- tests/data/something (MISMATCH)
-					│   └── s0m37h1ng <- tests/none/s0m37h1ng (UNPARENTED)
-					├── foo                                   
-					│   └── bar       <- bar                  (UNKNOWN)
-					└── quux                                  
-					    └── quuz      <- quuz                 (READY)
+					.                  root: test
+					├── baz                                 
+					│   └── qux        test/qux              (DONE)
+					├── corge                               
+					│   ├── anything   ~/file                (OBSTRUCTED)
+					│   ├── gralt      test/gralt            (CONFLICT)
+					│   ├── something  tests/data/something  (MISMATCH)
+					│   └── s0m37h1ng  tests/none/s0m37h1ng  (UNPARENTED)
+					├── foo                                 
+					│   └── bar        bar                   (UNKNOWN)
+					└── quux                                
+					    └── quuz       quuz                  (READY)
 				"}),
 				"invalid non-colored output",
 			);

@@ -32,12 +32,12 @@ output to park via stdin:
 
 ----
 $ envsubst < config.toml | park
-.                 := /home/you/dotfiles
-├── fontconfig    <- /home/you/.config/fontconfig (READY)
-├── kakoune       <- /home/you/.config/kak        (DONE)
+.                  root: ~/dotfiles
+├── fontconfig     ~/.config/fontconfig  (READY)
+├── kakoune        ~/.config/kak         (DONE)
 └── zsh
     └── config
-        └── zshrc <- /home/you/.zshrc             (READY)
+        └── zshrc  ~/.zshrc              (READY)
 ----
 
 Then, in order to create their respective symlinks, we need to pass `--link` to the command:
@@ -56,13 +56,13 @@ we need to pass those tags as arguments to park:
 
 ----
 $ envsubst < config.toml | park +wayland +river
-.                 := /home/you/dotfiles
-├── fontconfig    <- /home/you/.config/fontconfig (DONE)
-├── kakokune      <- /home/you/.config/kak        (DONE)
-├── river         <- /home/you/.config/river      (READY)
+.                  root: ~/dotfiles
+├── fontconfig     ~/.config/fontconfig  (DONE)
+├── kakokune       ~/.config/kak         (DONE)
+├── river          ~/.config/river       (READY)
 └── zsh
     └── config
-        └── zshrc <- /home/you/.zshrc             (DONE)
+        └── zshrc  ~/.zshrc              (DONE)
 ----
 
 ==== Filtering by target name
@@ -72,8 +72,8 @@ only `fontconfig` will be evaluated, since its target name is passed as argument
 
 ----
 $ envsubst < config.toml | park fontconfig
-.                 := /home/you/dotfiles
-└── fontconfig    <- /home/you/.config/fontconfig (DONE)
+.                  root: ~/dotfiles
+└── fontconfig     ~/.config/fontconfig  (DONE)
 ----
 
 === Configuration
