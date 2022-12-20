@@ -5,8 +5,8 @@ pub use clap;
 /// Command-line arguments.
 #[derive(Default, Parser)]
 #[command(name = "park", about, version)]
-#[command(long_about =
-"park is a CLI tool that manages your dotfiles based on a configuration file
+#[command(
+	long_about = "park is a CLI tool that manages your dotfiles based on a configuration file
 (more specifically, a TOML file).
 
 By default, it shows a preview tree of how your target files would be
