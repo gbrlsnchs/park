@@ -58,11 +58,17 @@ impl<'a> Display for Printer<'a> {
 		} in &self.tree.root
 		{
 			if level == 0 {
-				let cwd = self.resolve_style(Colour::White.italic()).paint(format!(
-					"root: {}",
-					self.replace_home(self.tree.work_dir.to_string_lossy())
-				));
-				if writeln!(tab_writer, ".\t {}", cwd,).is_err() {
+				let cwd = self.resolve_style(Colour::White.italic()).paint({
+					let path = self.replace_home(self.tree.work_dir.to_string_lossy());
+
+					if self.colored {
+						path
+					} else {
+						format!("({})", path)
+					}
+				});
+
+				if writeln!(tab_writer, ". {}", cwd,).is_err() {
 					return Err(FmtError);
 				}
 
@@ -112,29 +118,39 @@ impl<'a> Display for Printer<'a> {
 						Status::Mismatch | Status::Unparented => Colour::Yellow,
 						Status::Conflict | Status::Obstructed => Colour::Red,
 					}
-					.normal(),
+					.reverse(),
 				);
-				let status = format!("({:?})", status).to_uppercase();
+				let status = if self.colored {
+					format!(" {:?} ", status)
+				} else {
+					format!("[{:?}]", status)
+				}
+				.to_uppercase();
 
 				let target_segment: Vec<&OsStr> = target_path.iter().collect();
 				let is_leaf = level == target_segment.len();
 				let target_path = target_path.file_name().unwrap().to_string_lossy();
 				if writeln!(
 					tab_writer,
-					"{target_path}\t {link_path}\t {status}",
+					"{target_path}\t{link_path}\t{status}",
 					target_path = {
 						let mut style = Style::new();
 
 						if is_leaf {
-							style = style.bold();
+							style = Colour::Cyan.bold();
 						}
 
 						self.resolve_style(style).paint(target_path)
 					},
-					link_path = self.resolve_style(Colour::Purple.normal()).paint(format!(
-						"{}",
-						self.replace_home(link_path.to_string_lossy())
-					)),
+					link_path = self.resolve_style(Colour::Purple.italic()).paint({
+						let path = self.replace_home(link_path.to_string_lossy());
+
+						if self.colored {
+							format!(" {} ", path)
+						} else {
+							format!("({})", path)
+						}
+					}),
 					status = status_style.paint(status),
 				)
 				.is_err()
@@ -227,26 +243,26 @@ mod tests {
 
 			println!("\n{}", printer);
 
-			let target_color = Style::new().bold();
-			let link_color = Colour::Purple.normal();
+			let target_color = Colour::Cyan.bold();
+			let link_color = Colour::Purple.italic();
 			let symbols_color = Colour::White.normal();
 
 			assert_eq!(
 				printer.to_string(),
 				format!(
 					indoc! {"
-					.                  {current_dir}
-					{t_bar}baz                                 
-					{straight_bar}{l_bar}{tgt1}        {test_qux}              {done}
-					{t_bar}corge                               
-					{straight_bar}{t_bar}{tgt2}   {file_file}                {obstructed}
-					{straight_bar}{t_bar}{tgt3}      {test_gralt}            {conflict}
-					{straight_bar}{t_bar}{tgt4}  {tests_data_something}  {mismatch}
-					{straight_bar}{l_bar}{tgt5}  {tests_none_something}  {unparented}
-					{t_bar}foo                                 
-					{straight_bar}{l_bar}{tgt6}        {bar}                   {unknown}
-					{l_bar}quux                                
-					{blank}{l_bar}{tgt7}       {quuz}                  {ready}
+					. {current_dir}
+					{t_bar}baz                                  
+					{straight_bar}{l_bar}{tgt1}       {test_qux}             {done}
+					{t_bar}corge                                
+					{straight_bar}{t_bar}{tgt2}  {file_file}               {obstructed}
+					{straight_bar}{t_bar}{tgt3}     {test_gralt}           {conflict}
+					{straight_bar}{t_bar}{tgt4} {tests_data_something} {mismatch}
+					{straight_bar}{l_bar}{tgt5} {tests_none_something} {unparented}
+					{t_bar}foo                                  
+					{straight_bar}{l_bar}{tgt6}       {bar}                  {unknown}
+					{l_bar}quux                                 
+					{blank}{l_bar}{tgt7}      {quuz}                 {ready}
 				"},
 					t_bar = symbols_color.paint("├── "),
 					l_bar = symbols_color.paint("└── "),
@@ -259,21 +275,21 @@ mod tests {
 					tgt7 = target_color.paint("quuz"),
 					straight_bar = symbols_color.paint("│   "),
 					blank = symbols_color.paint("    "),
-					current_dir = Colour::White.italic().paint("root: test"),
-					bar = link_color.paint("bar"),
-					test_qux = link_color.paint("test/qux"),
-					quuz = link_color.paint("quuz"),
-					tests_data_something = link_color.paint("tests/data/something"),
-					tests_none_something = link_color.paint("tests/none/s0m37h1ng"),
-					test_gralt = link_color.paint("test/gralt"),
-					file_file = link_color.paint("~/file"),
-					unknown = Colour::White.normal().paint("(UNKNOWN)"),
-					done = Colour::Blue.normal().paint("(DONE)"),
-					ready = Colour::Green.normal().paint("(READY)"),
-					unparented = Colour::Yellow.normal().paint("(UNPARENTED)"),
-					mismatch = Colour::Yellow.normal().paint("(MISMATCH)"),
-					conflict = Colour::Red.normal().paint("(CONFLICT)"),
-					obstructed = Colour::Red.normal().paint("(OBSTRUCTED)"),
+					current_dir = Colour::White.italic().paint("test"),
+					bar = link_color.paint(" bar "),
+					test_qux = link_color.paint(" test/qux "),
+					quuz = link_color.paint(" quuz "),
+					tests_data_something = link_color.paint(" tests/data/something "),
+					tests_none_something = link_color.paint(" tests/none/s0m37h1ng "),
+					test_gralt = link_color.paint(" test/gralt "),
+					file_file = link_color.paint(" ~/file "),
+					unknown = Colour::White.reverse().paint(" UNKNOWN "),
+					done = Colour::Blue.reverse().paint(" DONE "),
+					ready = Colour::Green.reverse().paint(" READY "),
+					unparented = Colour::Yellow.reverse().paint(" UNPARENTED "),
+					mismatch = Colour::Yellow.reverse().paint(" MISMATCH "),
+					conflict = Colour::Red.reverse().paint(" CONFLICT "),
+					obstructed = Colour::Red.reverse().paint(" OBSTRUCTED "),
 				),
 				"invalid colored output",
 			);
@@ -291,18 +307,18 @@ mod tests {
 			assert_eq!(
 				printer.to_string(),
 				format!(indoc! {"
-					.                  root: test
-					├── baz                                 
-					│   └── qux        test/qux              (DONE)
-					├── corge                               
-					│   ├── anything   ~/file                (OBSTRUCTED)
-					│   ├── gralt      test/gralt            (CONFLICT)
-					│   ├── something  tests/data/something  (MISMATCH)
-					│   └── s0m37h1ng  tests/none/s0m37h1ng  (UNPARENTED)
-					├── foo                                 
-					│   └── bar        bar                   (UNKNOWN)
-					└── quux                                
-					    └── quuz       quuz                  (READY)
+					. (test)
+					├── baz                                  
+					│   └── qux       (test/qux)             [DONE]
+					├── corge                                
+					│   ├── anything  (~/file)               [OBSTRUCTED]
+					│   ├── gralt     (test/gralt)           [CONFLICT]
+					│   ├── something (tests/data/something) [MISMATCH]
+					│   └── s0m37h1ng (tests/none/s0m37h1ng) [UNPARENTED]
+					├── foo                                  
+					│   └── bar       (bar)                  [UNKNOWN]
+					└── quux                                 
+					    └── quuz      (quuz)                 [READY]
 				"}),
 				"invalid non-colored output",
 			);
