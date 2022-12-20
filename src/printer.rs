@@ -1,6 +1,5 @@
 use std::{
-	env,
-	ffi::OsStr,
+	ffi::{OsStr, OsString},
 	fmt::{Display, Error as FmtError, Formatter, Result as FmtResult},
 	io::Write,
 	str,
@@ -18,6 +17,7 @@ use crate::parser::{
 pub struct Printer<'a> {
 	pub tree: &'a Tree,
 	pub colored: bool,
+	pub home: Option<OsString>,
 }
 
 impl<'a> Printer<'a> {
@@ -27,6 +27,17 @@ impl<'a> Printer<'a> {
 		} else {
 			Style::new()
 		}
+	}
+
+	fn replace_home<S>(&self, s: S) -> String
+	where
+		S: AsRef<str>,
+	{
+		if let Some(home) = self.home.as_ref().and_then(|s| s.to_str()) {
+			return s.as_ref().replacen(home, "~", 1);
+		}
+
+		s.as_ref().into()
 	}
 }
 
@@ -49,7 +60,7 @@ impl<'a> Display for Printer<'a> {
 			if level == 0 {
 				let cwd = self.resolve_style(Colour::White.italic()).paint(format!(
 					"root: {}",
-					replace_home(self.tree.work_dir.to_string_lossy())
+					self.replace_home(self.tree.work_dir.to_string_lossy())
 				));
 				if writeln!(tab_writer, ".\t {}", cwd,).is_err() {
 					return Err(FmtError);
@@ -120,9 +131,10 @@ impl<'a> Display for Printer<'a> {
 
 						self.resolve_style(style).paint(target_path)
 					},
-					link_path = self
-						.resolve_style(Colour::Purple.normal())
-						.paint(format!("{}", replace_home(link_path.to_string_lossy()))),
+					link_path = self.resolve_style(Colour::Purple.normal()).paint(format!(
+						"{}",
+						self.replace_home(link_path.to_string_lossy())
+					)),
 					status = status_style.paint(status),
 				)
 				.is_err()
@@ -146,17 +158,6 @@ impl<'a> Display for Printer<'a> {
 
 		Ok(())
 	}
-}
-
-fn replace_home<S>(s: S) -> String
-where
-	S: AsRef<str>,
-{
-	if let Ok(home) = env::var("HOME") {
-		return s.as_ref().replacen(&home, "~", 1);
-	}
-
-	s.as_ref().into()
 }
 
 #[cfg(test)]
@@ -217,12 +218,11 @@ mod tests {
 			work_dir: "test".into(),
 		};
 
-		env::set_var("HOME", "file");
-
 		{
 			let printer = Printer {
 				tree: &tree,
 				colored: true,
+				home: Some("file".into()),
 			};
 
 			println!("\n{}", printer);
@@ -283,6 +283,7 @@ mod tests {
 			let printer = Printer {
 				tree: &tree,
 				colored: false,
+				home: Some("file".into()),
 			};
 
 			println!("\n{}", printer);

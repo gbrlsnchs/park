@@ -1,15 +1,21 @@
-use std::io::Write;
 use std::path::PathBuf;
-
-use std::env;
+use std::{ffi::OsString, io::Write};
 
 use anyhow::{Context, Result};
 use park_cli::Park;
 
 use crate::{config::Config, parser::tree::Tree, printer::Printer};
 
+pub struct Env {
+	pub colored: bool,
+	pub home: Option<OsString>,
+}
+
 /// Runs the program, parsing STDIN for a config file.
-pub fn run(input: &str, mut stdout: impl Write, cli: Park) -> Result<()> {
+pub fn run<W>(env: Env, input: &str, mut stdout: W, cli: Park) -> Result<()>
+where
+	W: Write,
+{
 	let config: Config =
 		toml::from_str(input).with_context(|| "could not read input configuration")?;
 	let Park { link, filters } = cli;
@@ -33,7 +39,8 @@ pub fn run(input: &str, mut stdout: impl Write, cli: Park) -> Result<()> {
 			"{}",
 			Printer {
 				tree: &tree,
-				colored: env::var_os("NO_COLOR").is_none(),
+				colored: env.colored,
+				home: env.home,
 			}
 		)
 		.with_context(|| "could not print preview tree")?;
@@ -66,7 +73,15 @@ mod tests {
 		{
 			let mut stdout = Vec::new();
 
-			run(input, &mut stdout, Park::default())?;
+			run(
+				Env {
+					colored: true,
+					home: None,
+				},
+				input,
+				&mut stdout,
+				Park::default(),
+			)?;
 
 			let target_color = Style::new().bold();
 			let link_color = Colour::Purple.normal();
@@ -95,8 +110,11 @@ mod tests {
 		{
 			let mut stdout = Vec::new();
 
-			env::set_var("NO_COLOR", "1");
 			run(
+				Env {
+					colored: false,
+					home: None,
+				},
 				&input,
 				&mut stdout,
 				Park {
@@ -104,7 +122,6 @@ mod tests {
 					..Park::default()
 				},
 			)?;
-			env::remove_var("NO_COLOR");
 
 			let current_dir = env::current_dir().unwrap_or_default();
 
@@ -139,6 +156,10 @@ mod tests {
 		let mut stdout = Vec::new();
 
 		run(
+			Env {
+				colored: true,
+				home: None,
+			},
 			&input,
 			&mut stdout,
 			Park {
@@ -189,7 +210,12 @@ mod tests {
 
 		let mut stdout = Vec::new();
 
+		env::remove_var("NO_COLOR");
 		run(
+			Env {
+				colored: true,
+				home: None,
+			},
 			&input,
 			&mut stdout,
 			Park {
@@ -237,6 +263,10 @@ mod tests {
 		let mut stdout = Vec::new();
 
 		run(
+			Env {
+				colored: true,
+				home: None,
+			},
 			input,
 			&mut stdout,
 			Park {
