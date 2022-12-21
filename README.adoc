@@ -5,6 +5,8 @@ to a configuration file written in TOML.
 
 image:https://builds.sr.ht/~gbrlsnchs/park.svg[builds.sr.ht status,link=https://builds.sr.ht/~gbrlsnchs/park]
 
+image:misc/example.png[park tree preview]
+
 === Usage
 See `park(1)` and `park(5)`.
 
