@@ -539,19 +539,19 @@ mod tests {
 				description: "single target has conflict",
 				input: Tree {
 					root: Node::Branch(Edges::from([(
-						"README.adoc".into(),
-						Node::Leaf("README.adoc".into()),
+						"LICENSE".into(),
+						Node::Leaf("LICENSE".into()),
 					)])),
 					work_dir: current_dir.into(),
 					statuses: Statuses::from([]),
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([(
-						"README.adoc".into(),
-						Node::Leaf("README.adoc".into()),
+						"LICENSE".into(),
+						Node::Leaf("LICENSE".into()),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([("README.adoc".into(), Status::Conflict)]),
+					statuses: Statuses::from([("LICENSE".into(), Status::Conflict)]),
 				},
 			},
 			Test {
