@@ -5,11 +5,14 @@ use std::{
 	process::{Command, Stdio},
 };
 
-use park_cli::Park;
+use crate::cli::Park;
 
+use clap::{Command as App, CommandFactory};
 use clap_complete::{self, Shell};
 use clap_mangen::Man;
-use park_cli::clap::{Command as App, CommandFactory};
+
+#[path = "src/cli.rs"]
+mod cli;
 
 fn main() -> Result<(), Error> {
 	println!("cargo:rerun-if-changed=doc");

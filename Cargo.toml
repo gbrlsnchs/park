@@ -1,20 +1,29 @@
 [package]
 name = "park"
-version = "0.0.0"
+version = "1.0.0"
+description = "Configuration-based dotfiles manager"
 edition = "2021"
 publish = false
-
-[workspace]
-members = ["wrkspc/park-cli"]
 
 [dependencies]
 ansi_term = "=0.12.1"
 anyhow = "=1.0.68"
-park_cli = { path = "wrkspc/park-cli" }
 serde = { version = "=1.0.133", features = ["derive"] }
 tabwriter = { version = "=1.2.1", features = ["ansi_formatting"] }
 thiserror = "=1.0.26"
 toml = "=0.5.8"
+
+[dependencies.clap]
+version = "=4.0.29"
+default-features = false
+features = [
+	"derive",
+	"help",
+	"std",
+	"suggestions",
+	"usage",
+	"wrap_help",
+]
 
 [dev-dependencies]
 indoc = "=1.0.3"
@@ -23,4 +32,8 @@ pretty_assertions = "=0.7.2"
 [build-dependencies]
 clap_complete = "=4.0.6"
 clap_mangen = "=0.2.5"
-park_cli = { path = "wrkspc/park-cli" }
+
+[build-dependencies.clap]
+version = "=4.0.29"
+default-features = false
+features = ["derive"]

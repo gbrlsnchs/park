@@ -2,8 +2,8 @@ use std::path::PathBuf;
 use std::{ffi::OsString, io::Write};
 
 use anyhow::{Context, Result};
-use park_cli::Park;
 
+use crate::cli::Park;
 use crate::{config::Config, parser::tree::Tree, printer::Printer};
 
 pub struct Env {

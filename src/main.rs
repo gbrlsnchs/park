@@ -3,12 +3,13 @@ use std::{
 	io::{self, Read},
 };
 
-use park_cli::clap::Parser;
+use cli::Park;
 
 use anyhow::Result;
-use park_cli::Park;
+use clap::Parser;
 use run::Env;
 
+mod cli;
 mod config;
 mod parser;
 mod printer;
