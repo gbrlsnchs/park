@@ -8,7 +8,7 @@ use thiserror::Error;
 use super::iter::{Element, Iter};
 
 /// Possible states a link node can be in.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Status {
 	/// Unknown state, probably because the node wasn't analyzed.
 	Unknown,
@@ -47,6 +47,12 @@ pub type Edge = (PathBuf, Node);
 pub enum Node {
 	Branch(Edges),
 	Leaf(PathBuf),
+}
+
+impl Default for Node {
+	fn default() -> Self {
+		Self::Branch(Edges::default())
+	}
 }
 
 impl Node {

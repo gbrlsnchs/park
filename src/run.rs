@@ -4,6 +4,7 @@ use std::{ffi::OsString, io::Write};
 use anyhow::{Context, Result};
 
 use crate::cli::Park;
+use crate::parser::tree::LinkOpts;
 use crate::{config::Config, parser::tree::Tree, printer::Printer};
 
 pub struct Env {
@@ -18,7 +19,12 @@ where
 {
 	let config: Config =
 		toml::from_str(input).with_context(|| "could not read input configuration")?;
-	let Park { link, filters } = cli;
+	let Park {
+		link,
+		filters,
+		replace,
+		create_dirs,
+	} = cli;
 
 	let (tags, targets): (Vec<String>, Vec<String>) =
 		filters.into_iter().partition(|s| s.starts_with('+'));
@@ -26,13 +32,21 @@ where
 	let tags = tags.iter().map(|s| &s[1..]).map(|s| s.into()).collect();
 	let targets = targets.iter().map(PathBuf::from).collect();
 
-	let mut tree =
-		Tree::parse(config, (tags, targets)).with_context(|| "could not parse target")?;
+	let mut tree = Tree::parse(
+		config,
+		(tags, targets),
+		LinkOpts {
+			replace,
+			create_dirs,
+		},
+	)
+	.with_context(|| "could not parse target")?;
 
-	tree.analyze().with_context(|| "could not analyze target")?;
+	tree.analyze()
+		.with_context(|| "could not analyze targets")?;
 
 	if link {
-		tree.link().with_context(|| "could not link target")?;
+		tree.link().with_context(|| "could not link targets")?;
 	} else {
 		write!(
 			stdout,

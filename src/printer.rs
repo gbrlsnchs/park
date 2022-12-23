@@ -106,8 +106,9 @@ impl<'a> Display for Printer<'a> {
 				let default_status = Status::Unknown;
 				let status = self
 					.tree
-					.statuses
+					.problems
 					.get(&link_path)
+					.or_else(|| self.tree.statuses.get(&link_path))
 					.unwrap_or(&default_status);
 
 				let status_style = self.resolve_style(
@@ -232,6 +233,7 @@ mod tests {
 				("file/file".into(), Status::Obstructed),
 			]),
 			work_dir: "test".into(),
+			..Tree::default()
 		};
 
 		{

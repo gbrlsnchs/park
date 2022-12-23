@@ -1,5 +1,5 @@
 use std::{
-	collections::{HashMap, HashSet},
+	collections::{BTreeMap, HashMap, HashSet},
 	env, fs,
 	io::Error as IoError,
 	os::unix::fs as unix_fs,
@@ -11,22 +11,35 @@ use crate::config::{Config, TagSet, Tags, Target};
 use super::{
 	error::Error,
 	iter::Element as IterElement,
-	node::{Edges, Error as NodeError, Node, Status},
+	node::{Error as NodeError, Node, Status},
 };
 
 pub type Statuses = HashMap<PathBuf, Status>;
+pub type Problems = BTreeMap<PathBuf, Status>;
+
+#[derive(Debug, Default, PartialEq)]
+pub struct LinkOpts {
+	pub replace: bool,
+	pub create_dirs: bool,
+}
 
 /// Structure representing all dotfiles after reading a configuration for Park.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Tree {
 	pub root: Node,
 	pub work_dir: PathBuf,
 	pub statuses: Statuses,
+	pub problems: Problems,
+	pub link_opts: LinkOpts,
 }
 
-impl<'a> Tree {
+impl Tree {
 	/// Parses a configuration and returns a tree based on it.
-	pub fn parse(config: Config, filters: (TagSet, HashSet<PathBuf>)) -> Result<Self, NodeError> {
+	pub fn parse(
+		config: Config,
+		filters: (TagSet, HashSet<PathBuf>),
+		link_opts: LinkOpts,
+	) -> Result<Self, NodeError> {
 		let (mut runtime_tags, target_filters) = filters;
 		let targets = config.targets.unwrap_or_default();
 
@@ -34,9 +47,9 @@ impl<'a> Tree {
 		let work_dir = config.work_dir.unwrap_or(cwd);
 
 		let mut tree = Tree {
-			root: Node::Branch(Edges::new()),
 			work_dir,
-			statuses: Statuses::new(),
+			link_opts,
+			..Tree::default()
 		};
 
 		let Config {
@@ -96,6 +109,7 @@ impl<'a> Tree {
 	pub fn analyze(&mut self) -> Result<(), IoError> {
 		let Tree {
 			ref mut statuses,
+			ref mut problems,
 			ref root,
 			..
 		} = self;
@@ -110,53 +124,52 @@ impl<'a> Tree {
 				if let Some(parent) = link_path.parent() {
 					for parent in parent.ancestors() {
 						if parent.exists() && !parent.is_dir() {
-							statuses.insert(link_path, Status::Obstructed);
+							problems.insert(link_path, Status::Obstructed);
 
 							continue 'check;
 						}
 					}
 				}
 
-				let existing_target_path = link_path.read_link();
+				if let Ok(existing_target_path) = link_path.read_link() {
+					let target_path = self.work_dir.join(target_path);
 
-				if existing_target_path.is_err() {
-					let link_exists = link_path.exists();
-					let link_parent_exists = link_path.parent().map_or(true, |parent| {
-						parent.as_os_str().is_empty() || parent.exists()
-					});
-					statuses.insert(
-						link_path,
-						if link_exists {
-							Status::Conflict
-						} else if link_parent_exists {
-							Status::Ready
-						} else {
-							Status::Unparented
-						},
-					);
+					if existing_target_path == target_path {
+						statuses.insert(link_path, Status::Done);
+					} else if self.link_opts.replace {
+						statuses.insert(link_path, Status::Mismatch);
+					} else {
+						problems.insert(link_path, Status::Mismatch);
+					}
 
 					continue;
 				}
 
-				let existing_target_path = existing_target_path.unwrap();
+				let link_exists = link_path.exists();
+				let link_parent_exists = link_path.parent().map_or(true, |parent| {
+					parent.as_os_str().is_empty() || parent.exists()
+				});
 
-				let target_path = self.work_dir.join(target_path);
-
-				statuses.insert(
-					link_path,
-					if existing_target_path == target_path {
-						Status::Done
-					} else {
-						Status::Mismatch
-					},
-				);
+				if link_exists {
+					problems.insert(link_path, Status::Conflict);
+				} else if link_parent_exists {
+					statuses.insert(link_path, Status::Ready);
+				} else if self.link_opts.create_dirs {
+					statuses.insert(link_path, Status::Unparented);
+				} else {
+					problems.insert(link_path, Status::Unparented);
+				}
 			}
 		}
 
 		Ok(())
 	}
 
-	pub fn link(&self) -> Result<(), Error> {
+	pub fn link(self) -> Result<(), Error> {
+		if !self.problems.is_empty() {
+			return Err(Error::BadFiles(self.problems));
+		}
+
 		let links: Result<Vec<(PathBuf, PathBuf)>, Error> = self
 			.root
 			.into_iter()
@@ -177,11 +190,14 @@ impl<'a> Tree {
 
 					if let Some(status) = self.statuses.get(&link_path) {
 						match status {
-							// TODO: Return more detailed errors.
-							Status::Unknown
-							| Status::Mismatch
-							| Status::Conflict
-							| Status::Obstructed => return Err(Error::InternalError(link_path)),
+							Status::Unknown | Status::Conflict | Status::Obstructed => {
+								return Err(Error::InternalError(link_path))
+							}
+							Status::Mismatch => {
+								if let Err(err) = fs::remove_file(&link_path) {
+									return Err(Error::IoError(err.kind()));
+								}
+							}
 							Status::Unparented => {
 								if let Some(link_parent_dir) = link_path.parent() {
 									if let Err(err) = fs::create_dir_all(link_parent_dir) {
@@ -195,7 +211,7 @@ impl<'a> Tree {
 						return Ok((self.work_dir.join(target_path), link_path.clone()));
 					}
 
-					unreachable!();
+					Err(Error::InternalError(link_path))
 				},
 			)
 			.collect();
@@ -219,7 +235,10 @@ mod tests {
 
 	use pretty_assertions::assert_eq;
 
-	use crate::config::{Link, TagSet, Tags, TargetMap};
+	use crate::{
+		config::{Link, TagSet, Tags, TargetMap},
+		parser::node::Edges,
+	};
 
 	use super::*;
 
@@ -227,7 +246,7 @@ mod tests {
 	fn parse() -> Result<(), IoError> {
 		struct Test<'a> {
 			description: &'a str,
-			input: (Config, (TagSet, HashSet<PathBuf>)),
+			input: (Config, (TagSet, HashSet<PathBuf>), LinkOpts),
 			output: Result<Tree, NodeError>,
 		}
 
@@ -241,12 +260,20 @@ mod tests {
 						targets: Some(TargetMap::from([("foo".into(), Target::default())])),
 						..Config::default()
 					},
-					(TagSet::from([]), HashSet::from([])),
+					(TagSet::default(), HashSet::default()),
+					LinkOpts {
+						replace: true,
+						create_dirs: true,
+					},
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					link_opts: LinkOpts {
+						replace: true,
+						create_dirs: true,
+					},
+					..Tree::default()
 				}),
 			},
 			Test {
@@ -257,6 +284,7 @@ mod tests {
 						..Config::default()
 					},
 					(TagSet::from([]), HashSet::from([])),
+					LinkOpts::default(),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([(
@@ -264,7 +292,7 @@ mod tests {
 						Node::Branch(Edges::from([("bar".into(), Node::Leaf("bar".into()))])),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				}),
 			},
 			Test {
@@ -284,6 +312,7 @@ mod tests {
 						..Config::default()
 					},
 					(TagSet::from([]), HashSet::from([])),
+					LinkOpts::default(),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([(
@@ -291,7 +320,7 @@ mod tests {
 						Node::Leaf("new_name".into()),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				}),
 			},
 			Test {
@@ -314,11 +343,12 @@ mod tests {
 						TagSet::from(["foo".into(), "bar".into()]),
 						HashSet::from([]),
 					),
+					LinkOpts::default(),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				}),
 			},
 			Test {
@@ -338,11 +368,12 @@ mod tests {
 						..Config::default()
 					},
 					(TagSet::from(["test".into()]), HashSet::from([])),
+					LinkOpts::default(),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				}),
 			},
 			Test {
@@ -365,11 +396,12 @@ mod tests {
 						TagSet::from(["test".into(), "bar".into()]),
 						HashSet::from([]),
 					),
+					LinkOpts::default(),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				}),
 			},
 			Test {
@@ -389,11 +421,11 @@ mod tests {
 						..Config::default()
 					},
 					(TagSet::from(["test".into()]), HashSet::from([])),
+					LinkOpts::default(),
 				),
 				output: Ok(Tree {
-					root: Node::Branch(Edges::from([])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				}),
 			},
 			Test {
@@ -413,11 +445,12 @@ mod tests {
 						..Config::default()
 					},
 					(TagSet::from(["test".into()]), HashSet::from([])),
+					LinkOpts::default(),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				}),
 			},
 			Test {
@@ -428,6 +461,7 @@ mod tests {
 						..Config::default()
 					},
 					(TagSet::from([]), HashSet::from([])),
+					LinkOpts::default(),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([(
@@ -438,7 +472,7 @@ mod tests {
 						)])),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				}),
 			},
 			Test {
@@ -452,6 +486,7 @@ mod tests {
 						..Config::default()
 					},
 					(TagSet::from([]), HashSet::from(["foo/bar".into()])),
+					LinkOpts::default(),
 				),
 				output: Ok(Tree {
 					root: Node::Branch(Edges::from([(
@@ -459,13 +494,13 @@ mod tests {
 						Node::Branch(Edges::from([("bar".into(), Node::Leaf("bar".into()))])),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				}),
 			},
 		]);
 
 		for case in test_cases {
-			let got = Tree::parse(case.input.0, case.input.1);
+			let got = Tree::parse(case.input.0, case.input.1, case.input.2);
 
 			assert_eq!(got, case.output, "bad result for {:?}", case.description);
 		}
@@ -492,7 +527,7 @@ mod tests {
 						Node::Leaf("tests/foo".into()),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([(
@@ -501,17 +536,19 @@ mod tests {
 					)])),
 					work_dir: current_dir.into(),
 					statuses: Statuses::from([("tests/foo".into(), Status::Ready)]),
+					..Tree::default()
 				},
 			},
 			Test {
-				description: "single target whose parent is nonexistent should be unparented",
+				description:
+					"single target whose parent is nonexistent should be unparented (problem)",
 				input: Tree {
 					root: Node::Branch(Edges::from([(
 						"xxx/foo".into(),
 						Node::Leaf("xxx/foo".into()),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([(
@@ -519,7 +556,36 @@ mod tests {
 						Node::Leaf("xxx/foo".into()),
 					)])),
 					work_dir: current_dir.into(),
+					problems: Problems::from([("xxx/foo".into(), Status::Unparented)]),
+					..Tree::default()
+				},
+			},
+			Test {
+				description: "single target whose parent is nonexistent should be unparented (ok)",
+				input: Tree {
+					root: Node::Branch(Edges::from([(
+						"xxx/foo".into(),
+						Node::Leaf("xxx/foo".into()),
+					)])),
+					work_dir: current_dir.into(),
+					link_opts: LinkOpts {
+						create_dirs: true,
+						..LinkOpts::default()
+					},
+					..Tree::default()
+				},
+				output: Tree {
+					root: Node::Branch(Edges::from([(
+						"xxx/foo".into(),
+						Node::Leaf("xxx/foo".into()),
+					)])),
+					work_dir: current_dir.into(),
+					link_opts: LinkOpts {
+						create_dirs: true,
+						..LinkOpts::default()
+					},
 					statuses: Statuses::from([("xxx/foo".into(), Status::Unparented)]),
+					..Tree::default()
 				},
 			},
 			Test {
@@ -527,12 +593,13 @@ mod tests {
 				input: Tree {
 					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([("foo".into(), Node::Leaf("foo".into()))])),
 					work_dir: current_dir.into(),
 					statuses: Statuses::from([("foo".into(), Status::Ready)]),
+					..Tree::default()
 				},
 			},
 			Test {
@@ -543,7 +610,7 @@ mod tests {
 						Node::Leaf("LICENSE".into()),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([(
@@ -551,18 +618,23 @@ mod tests {
 						Node::Leaf("LICENSE".into()),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([("LICENSE".into(), Status::Conflict)]),
+					problems: Problems::from([("LICENSE".into(), Status::Conflict)]),
+					..Tree::default()
 				},
 			},
 			Test {
-				description: "single target with wrong existing link",
+				description: "single target with wrong existing link (ok)",
 				input: Tree {
 					root: Node::Branch(Edges::from([(
 						"something".into(),
 						Node::Leaf("tests/data/something".into()),
 					)])),
 					work_dir: current_dir.into(),
-					statuses: Statuses::from([]),
+					link_opts: LinkOpts {
+						replace: true,
+						..LinkOpts::default()
+					},
+					..Tree::default()
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([(
@@ -570,7 +642,12 @@ mod tests {
 						Node::Leaf("tests/data/something".into()),
 					)])),
 					work_dir: current_dir.into(),
+					link_opts: LinkOpts {
+						replace: true,
+						..LinkOpts::default()
+					},
 					statuses: Statuses::from([("tests/data/something".into(), Status::Mismatch)]),
+					..Tree::default()
 				},
 			},
 			Test {
@@ -581,7 +658,7 @@ mod tests {
 						Node::Leaf("tests/data/something".into()),
 					)])),
 					work_dir: "test".into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([(
@@ -590,6 +667,7 @@ mod tests {
 					)])),
 					work_dir: "test".into(),
 					statuses: Statuses::from([("tests/data/something".into(), Status::Done)]),
+					..Tree::default()
 				},
 			},
 			Test {
@@ -600,7 +678,7 @@ mod tests {
 						Node::Leaf("LICENSE/something".into()),
 					)])),
 					work_dir: "test".into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([(
@@ -608,7 +686,8 @@ mod tests {
 						Node::Leaf("LICENSE/something".into()),
 					)])),
 					work_dir: "test".into(),
-					statuses: Statuses::from([("LICENSE/something".into(), Status::Obstructed)]),
+					problems: Problems::from([("LICENSE/something".into(), Status::Obstructed)]),
+					..Tree::default()
 				},
 			},
 			Test {
@@ -619,7 +698,7 @@ mod tests {
 						Node::Leaf("LICENSE/foo/bar/something".into()),
 					)])),
 					work_dir: "test".into(),
-					statuses: Statuses::from([]),
+					..Tree::default()
 				},
 				output: Tree {
 					root: Node::Branch(Edges::from([(
@@ -627,10 +706,11 @@ mod tests {
 						Node::Leaf("LICENSE/foo/bar/something".into()),
 					)])),
 					work_dir: "test".into(),
-					statuses: Statuses::from([(
+					problems: Problems::from([(
 						"LICENSE/foo/bar/something".into(),
 						Status::Obstructed,
 					)]),
+					..Tree::default()
 				},
 			},
 		]);
@@ -668,6 +748,7 @@ mod tests {
 					)])),
 					work_dir: "fake_path".into(),
 					statuses: Statuses::from([("tests/data/foo".into(), Status::Done)]),
+					..Tree::default()
 				},
 				output: Ok(()),
 				files_created: Vec::from([]),
@@ -682,6 +763,7 @@ mod tests {
 					)])),
 					work_dir: "fake_path".into(),
 					statuses: Statuses::from([("tests/data/foo".into(), Status::Ready)]),
+					..Tree::default()
 				},
 				output: Ok(()),
 				files_created: Vec::from(["tests/data/foo".into()]),
@@ -696,10 +778,29 @@ mod tests {
 					)])),
 					work_dir: "fake_path".into(),
 					statuses: Statuses::from([("tests/xxx/foo".into(), Status::Unparented)]),
+					..Tree::default()
 				},
 				output: Ok(()),
 				files_created: Vec::from(["tests/xxx/foo".into()]),
 				dirs_created: Vec::from(["tests/xxx".into()]),
+			},
+			Test {
+				description: "bad unparented link",
+				input: Tree {
+					root: Node::Branch(Edges::from([(
+						"foo".into(),
+						Node::Leaf("tests/xxx/foo".into()),
+					)])),
+					work_dir: "fake_path".into(),
+					problems: Problems::from([("tests/xxx/foo".into(), Status::Unparented)]),
+					..Tree::default()
+				},
+				output: Err(Error::BadFiles(Problems::from([(
+					"tests/xxx/foo".into(),
+					Status::Unparented,
+				)]))),
+				files_created: Vec::from([]),
+				dirs_created: Vec::from([]),
 			},
 			Test {
 				description: "multiple links",
@@ -713,6 +814,7 @@ mod tests {
 						("tests/data/foo".into(), Status::Ready),
 						("tests/data/bar".into(), Status::Ready),
 					]),
+					..Tree::default()
 				},
 				output: Ok(()),
 				files_created: Vec::from(["tests/data/foo".into(), "tests/data/bar".into()]),
@@ -727,6 +829,7 @@ mod tests {
 					)])),
 					work_dir: "fake_path".into(),
 					statuses: Statuses::from([("tests/data/something".into(), Status::Conflict)]),
+					..Tree::default()
 				},
 				output: Err(Error::InternalError("tests/data/something".into())),
 				files_created: Vec::from([]),
@@ -741,6 +844,7 @@ mod tests {
 					)])),
 					work_dir: "fake_path".into(),
 					statuses: Statuses::from([("tests/data/something".into(), Status::Obstructed)]),
+					..Tree::default()
 				},
 				output: Err(Error::InternalError("tests/data/something".into())),
 				files_created: Vec::from([]),
@@ -754,9 +858,28 @@ mod tests {
 					)])),
 					work_dir: "fake_path".into(),
 					statuses: Statuses::from([("tests/data/something".into(), Status::Mismatch)]),
+					..Tree::default()
+				},
+				description: "replace mismatch",
+				output: Ok(()),
+				files_created: Vec::from(["tests/data/something".into()]),
+				dirs_created: Vec::from([]),
+			},
+			Test {
+				input: Tree {
+					root: Node::Branch(Edges::from([(
+						"something".into(),
+						Node::Leaf("tests/data/something".into()),
+					)])),
+					work_dir: "fake_path".into(),
+					problems: Problems::from([("tests/data/something".into(), Status::Mismatch)]),
+					..Tree::default()
 				},
 				description: "bad link with mismatch",
-				output: Err(Error::InternalError("tests/data/something".into())),
+				output: Err(Error::BadFiles(Problems::from([(
+					"tests/data/something".into(),
+					Status::Mismatch,
+				)]))),
 				files_created: Vec::from([]),
 				dirs_created: Vec::from([]),
 			},
@@ -800,6 +923,7 @@ mod tests {
 			assert_eq!(got, case.output, "bad result for {:?}", case.description);
 		}
 
-		Ok(())
+		// Reset testing symlink.
+		unix_fs::symlink("test/something", "tests/data/something")
 	}
 }

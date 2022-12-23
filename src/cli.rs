@@ -11,6 +11,16 @@ pub struct Park {
 	#[arg(long, short, help = "Try to link eligible targets")]
 	pub link: bool,
 
+	#[arg(long, short, help = "Replace mismatched links")]
+	pub replace: bool,
+
+	#[arg(
+		long = "create-dirs",
+		short,
+		help = "Create parent directories when necessary"
+	)]
+	pub create_dirs: bool,
+
 	/// Runtime tags or file prefixes.
 	#[arg(help = "List of additional tags or target names for filtering")]
 	pub filters: Vec<String>,
