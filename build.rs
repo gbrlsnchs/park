@@ -7,9 +7,8 @@ use std::{
 
 use crate::cli::Park;
 
-use clap::{Command as App, CommandFactory};
+use clap::CommandFactory;
 use clap_complete::{self, Shell};
-use clap_mangen::Man;
 
 #[path = "src/cli.rs"]
 mod cli;
@@ -35,21 +34,14 @@ fn main() -> Result<(), Error> {
 		return Ok(());
 	}
 
-	build_manpages(app, &target_dir)?;
+	build_manpages(&target_dir)?;
 
 	Ok(())
 }
 
-fn build_manpages(app: App, target_dir: &Path) -> Result<(), Error> {
+fn build_manpages(target_dir: &Path) -> Result<(), Error> {
 	let doc_dir = target_dir.join("doc");
 	fs::create_dir_all(&doc_dir)?;
-
-	let man = Man::new(app);
-	let mut buffer: Vec<u8> = Default::default();
-	man.render_name_section(&mut buffer)?;
-	man.render_synopsis_section(&mut buffer)?;
-	man.render_description_section(&mut buffer)?;
-	man.render_options_section(&mut buffer)?;
 
 	for doc in fs::read_dir("doc")? {
 		let doc = doc?;
@@ -70,12 +62,7 @@ fn build_manpages(app: App, target_dir: &Path) -> Result<(), Error> {
 		let doc = PathBuf::from(doc.file_name());
 		let doc = doc.file_stem().unwrap();
 
-		let content = std::str::from_utf8(&output.stdout).unwrap();
-		let content = content
-			.replace("{{data}}", std::str::from_utf8(&buffer).unwrap())
-			.replace("\n\n.P", "\n.P");
-
-		fs::write(doc_dir.join(doc), content)?;
+		fs::write(doc_dir.join(doc), output.stdout)?;
 	}
 
 	Ok(())

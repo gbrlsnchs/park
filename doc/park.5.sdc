@@ -2,7 +2,7 @@ park(5)
 
 # NAME
 
-park - configuration schema and target statuses
+park - configuration schema
 
 # DESCRIPTION
 
@@ -86,27 +86,6 @@ The following fields are top-level fields.
 :  List of disjunctive tags that guard the target, that is, at least one of
    the tags listed must be passed to *park* for the target to be considered.
 :  _Empty array_, which means no disjunctive tags guard the target.
-
-# TARGET STATUSES
-
-## READY
-The target file is ready to be symlinked
-
-## DONE
-The target is already symlinked accordingly
-
-## UNPARENTED
-The target file is ready to be symlinked but its parent directory will be
-created by *park* during linking
-
-## MISMATCH
-A symlink exists, but it points to a different target file
-
-## CONFLICT
-Another file already exists where the symlink would be created
-
-## OBSTRUCTED
-The parent path of the symlink is not a directory
 
 # SEE ALSO
 

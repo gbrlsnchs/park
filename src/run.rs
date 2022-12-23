@@ -24,6 +24,7 @@ where
 		filters,
 		replace,
 		create_dirs,
+		..
 	} = cli;
 
 	let (tags, targets): (Vec<String>, Vec<String>) =
