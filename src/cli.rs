@@ -40,13 +40,13 @@ pub struct Park {
 	/// Use -h to show the short help, or --help to show the long one (or even better,
 	/// read the man pages).
 	#[arg(long, short, action = ArgAction::Help)]
-	pub help: bool,
+	pub help: Option<bool>,
 
 	/// Show version.
 	///
 	/// The version format is 'park <version>'. Use it wisely.
 	#[arg(long, short, action = ArgAction::Version)]
-	pub version: bool,
+	pub version: Option<bool>,
 
 	/// List of tags (appended with a plus sign) or target names (for filtering purposes).
 	#[arg()]
