@@ -45,7 +45,7 @@ the host system for *park* to work. See more details in the _OPTIONS_ section.
 *-c*, *--create-dirs*
 	Create parent directories when needed.
 
-	This will prevent links with status UNPARENTED to return an error
+	This will prevent links with status _UNPARENTED_ to return an error
 	during the linking step by creating all necessary directories that
 	compose the symlink's path.
 
@@ -77,7 +77,7 @@ When arguments don't have a plus sign prepended to them, they serve as
 target filters. When one or more filters are passed as arguments, *park*
 only evaluates targets whose names match such filters:
 
-	*park +tag1 target1* < input
+	*park +tag1 target1 target2* < input
 
 Note that target filters can be mixed with tags.
 
@@ -87,20 +87,20 @@ Note that target filters can be mixed with tags.
 The target file is ready to be symlinked
 
 ## DONE
-The target is already symlinked accordingly
+The target is already symlinked accordingly.
 
 ## UNPARENTED
 The target file is ready to be symlinked but its parent directory will be
-created by *park* during linking
+created by *park* during linking.
 
 ## MISMATCH
-A symlink exists, but it points to a different target file
+A symlink exists, but it points to a different target file.
 
 ## CONFLICT
-Another file already exists where the symlink would be created
+Another file already exists where the symlink would be created.
 
 ## OBSTRUCTED
-The parent path of the symlink is not a directory
+The parent path of the symlink is not a directory.
 
 # SEE ALSO
 
